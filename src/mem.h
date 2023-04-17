@@ -1,3 +1,4 @@
+#pragma once
 #include "types.h"
 
 typedef struct {
@@ -8,4 +9,4 @@ typedef struct {
 
 void write_u8(u16 addr, u8 data);
 u8 read_u8(u16 addr);
-void init_mem(u8* cartridge);
+void init_mem(Memory* memory, const char* cartridge);
