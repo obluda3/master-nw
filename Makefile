@@ -10,15 +10,17 @@ $(addprefix $(BUILD_DIR)/,$(addsuffix .o,$(basename $(1))))
 endef
 
 src = $(addprefix src/,\
-  main.c \
+  main.c, \
+	cpu.c, \
+	emu.c, \
+	mem.c, \
 )
 
 CFLAGS = -std=c99
 CFLAGS += $(shell $(NWLINK) eadk-cflags)
-CFLAGS += -Os -Wall
+CFLAGS += -O3 -Wall
 CFLAGS += -ggdb
 CFLAGS += -I$(EADK_FOLDER)
-$(info    VAR is $(CFLAGS))
 LDFLAGS = -Wl,--relocatable
 LDFLAGS += -nostartfiles
 LDFLAGS += --specs=nano.specs
