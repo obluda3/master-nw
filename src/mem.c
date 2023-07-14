@@ -69,7 +69,7 @@ u16 read_u16(u16 addr) {
   return (u16)(read_u8(addr) | (read_u8(addr + 1) << 8));
 }
 
-u16 write_u16(u16 addr, u16 value) {
-  write_u8(addr, value & 0xFF);
-  write_u8(addr + 1, (value & 0xFF00) >> 8);
+void write_u16(u16 addr, u16 data) {
+  write_u8(addr, data & 0xFF);
+  write_u8(addr + 1, (data & 0xFF00) >> 8);
 }

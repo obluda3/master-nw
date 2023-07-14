@@ -8,6 +8,7 @@ typedef struct {
 } Memory;
 
 void write_u8(u16 addr, u8 data);
+void write_u16(u16 addr, u16 data);
 u8 read_u8(u16 addr);
 u16 read_u16(u16 addr);
 void init_mem(Memory* memory, const char* cartridge);
