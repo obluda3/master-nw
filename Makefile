@@ -46,17 +46,17 @@ build: $(BUILD_DIR)/app.nwa
 check: $(BUILD_DIR)/app.bin
 
 .PHONY: run
-run: $(BUILD_DIR)/app.nwa src/input.txt
+run: $(BUILD_DIR)/app.nwa src/rom.sms
 	@echo "INSTALL $<"
-	$(Q) $(NWLINK) install-nwa --external-data src/input.txt $<
+	$(Q) $(NWLINK) install-nwa --external-data src/rom.sms $<
 
-$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.nwa src/input.txt
+$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.nwa src/rom.sms
 	@echo "BIN     $@"
-	$(Q) $(NWLINK) nwa-bin --external-data src/input.txt $< $@
+	$(Q) $(NWLINK) nwa-bin --external-data src/rom.sms $< $@
 
-$(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.nwa src/input.txt
+$(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.nwa src/rom.sms
 	@echo "ELF     $@"
-	$(Q) $(NWLINK) nwa-elf --external-data src/input.txt $< $@
+	$(Q) $(NWLINK) nwa-elf --external-data src/rom.sms $< $@
 
 $(BUILD_DIR)/app.nwa: $(call object_for,$(src)) $(BUILD_DIR)/icon.o
 	@echo "LD      $@"

@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <eadk.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;

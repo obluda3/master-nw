@@ -1,11 +1,14 @@
 #include "cpu.h"
-
 #include <string.h>
-
 #include "mem.h"
+
+#define INLINED __attribute__((always_inline)) inline
 
 Z80* cpu;
 int bonus_cycles = 0;
+
+int execute_cb();
+int execute_displacedcb(u16* reg);
 
 const u8 cycles[] = {
     0x04, 0x0A, 0x07, 0x06, 0x04, 0x04, 0x07, 0x04, 0x04, 0x0B, 0x07, 0x06, 0x04, 0x04, 0x07, 0x04,
@@ -26,7 +29,64 @@ const u8 cycles[] = {
     0x05, 0x0A, 0x0A, 0x04, 0x0A, 0x0B, 0x07, 0x0B, 0x05, 0x06, 0x0A, 0x04, 0x0A, 0x00, 0x07, 0x0B,
 };
 
-bool parity(u8 value) {
+const u8 cycles_ixiy[] = { 
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x0E, 0x14, 0x0A, 0x08, 0x08, 0x0B, 0x04, 0x04, 0x0F, 0x14, 0x0A, 0x08, 0x08, 0x0B, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x17, 0x17, 0x13, 0x04, 0x04, 0x0F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x13, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x13, 0x08,
+    0x13, 0x13, 0x13, 0x13, 0x13, 0x13, 0x04, 0x13, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04, 0x04, 0x04, 0x04, 0x04, 0x08, 0x08, 0x13, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x0E, 0x04, 0x17, 0x04, 0x0F, 0x04, 0x04, 0x04, 0x08, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+    0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0A, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
+};
+
+const u8 cycles_cb[] = { 
+  8,8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,12,8,8,8,8,8,8,8,12,8,8,
+  8,8,8,8,8,12,8,8,8,8,8,8,8,12,8,8,
+  8,8,8,8,8,12,8,8,8,8,8,8,8,12,8,8,
+  8,8,8,8,8,12,8,8,8,8,8,8,8,12,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,8,
+  8,8,8,8,8,15,8,8,8,8,8,8,8,15,8,
+};
+
+const u8 cycles_ed[] = {
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x09, 0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x09,
+  0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x09, 0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x09,
+  0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x12, 0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x12,
+  0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x08, 0x0C, 0x0C, 0x0F, 0x14, 0x08, 0x0E, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x10, 0x10, 0x10, 0x10, 0x08, 0x08, 0x08, 0x08, 0x10, 0x10, 0x10, 0x10, 0x08, 0x08, 0x08, 0x08,
+  0x10, 0x10, 0x10, 0x10, 0x08, 0x08, 0x08, 0x08, 0x10, 0x10, 0x10, 0x10, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,
+};
+
+INLINED bool parity(u8 value) {
   value ^= value >> 4;
   value &= 0xF;
   return !((0x6996 >> value) & 1);
@@ -38,49 +98,137 @@ void init_cpu(Z80* CPU) {
 }
 int opcode_cycles[] = {};
 
-void LD_R16_NN(u16* reg) {
+INLINED void SBC_R8_R8(u8* reg, u8 reg2) {
+  u8 reg1 = *reg;
+  u8 c = cpu->main.singles.F.c;
+  u16 result = reg1 - reg2 - c;
+  u8 newVal = result & 0xFF;
+  *reg = newVal;
+  cpu->main.singles.F.c = result < 0;
+  cpu->main.singles.F.n = 1;
+  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.h = ((reg1 & 0xF) - (reg2 & 0xF) - c) < 0xF;
+  cpu->main.singles.F.z = newVal == 0;
+  cpu->main.singles.F.s = (newVal & 0x80) != 0;
+}
+
+INLINED void SBC_R8_N(u8* reg) {
+  SBC_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void update_flags_bitwise(u8 result) {
+  cpu->main.singles.F.c = 0;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 1;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = (result & 0x80) != 0;
+}
+
+INLINED void AND_R8_R8(u8* reg, u8 reg2) {
+  u8 result = *reg & reg2;
+  *reg = result;
+  update_flags_bitwise(result);
+}
+
+INLINED void AND_R8_N(u8* reg) {
+  AND_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void XOR_R8_R8(u8* reg, u8 reg2) {
+  u8 result = *reg ^ reg2;
+  *reg = result;
+  update_flags_bitwise(result);
+}
+
+INLINED void XOR_R8_N(u8* reg) {
+  XOR_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void OR_R8_R8(u8* reg, u8 reg2) {
+  u8 result = *reg | reg2;
+  *reg = result;
+  update_flags_bitwise(result);
+}
+
+INLINED void OR_R8_N(u8* reg) {
+  OR_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+u8 _SUB_8(u8 op1, u8 op2) {
+  u16 result = op1 - op2;
+  u8 newVal = result & 0xFF;
+  cpu->main.singles.F.c = result < 0;
+  cpu->main.singles.F.n = 1;
+  cpu->main.singles.F.pv = (op1 & 0x80) == (op2 & 0x80) && (op1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.h = ((op1 & 0xF) - (op2 & 0xF)) < 0xF;
+  cpu->main.singles.F.z = newVal == 0;
+  cpu->main.singles.F.s = (newVal & 0x80) != 0;
+  return newVal;
+}
+
+INLINED void SUB_R8_R8(u8* reg, u8 reg2) {
+  *reg = _SUB_8(*reg, reg2);
+}
+
+INLINED void CP_R8_R8(u8* reg, u8 reg2) {
+  u8 r = *reg;
+  SUB_R8_R8(reg, reg2);
+  *reg = r;
+}
+
+INLINED void CP_R8_N(u8* reg) {
+  CP_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void LD_R16_NN(u16* reg) {
   *reg = read_u16(cpu->PC);
   cpu->PC += 2;
 }
 
-void LD_R16_NNa(u16* reg) {
+INLINED void LD_R16_NNa(u16* reg) {
   *reg = read_u16(read_u16(cpu->PC));
   cpu->PC += 2;
 }
 
-void LD_R8_R8(u8* reg, u8 val) {
+INLINED void LD_R8_R8(u8* reg, u8 val) {
   *reg = val;
 }
 
-void LD_NN_R16(u16 addr, u16 reg) {
+INLINED void LD_NN_R16(u16 addr, u16 reg) {
   write_u16(addr, reg);
   cpu->PC += 2;
 }
 
-void LD_NN_R8(u8 reg) {
+INLINED void LD_NN_R8(u8 reg) {
   write_u8(read_u16(cpu->PC), reg);
   cpu->PC += 2;
 }
 
-void LD_R8_N(u8* reg) {
+INLINED void LD_R8_N(u8* reg) {
   *reg = read_u8(cpu->PC);
   cpu->PC += 1;
 }
 
-void LD_R8_NN(u8* reg) {
+INLINED void LD_R8_NN(u8* reg) {
   *reg = read_u8(read_u16(cpu->PC));
   cpu->PC += 2;
 }
 
-void LD_R16_R8(u16 dest, u8 value) {
+INLINED void LD_R16_R8(u16 dest, u8 value) {
   write_u8(dest, value);
 }
 
-void LD_R8_R16(u8* dest, u16 addr) {
+INLINED void LD_R8_R16(u8* dest, u16 addr) {
   *dest = read_u8(addr);
 }
 
-void ADD_R16_R16(u16* dest, u16* value) {
+INLINED void ADD_R16_R16(u16* dest, u16* value) {
   u16 dst = *dest;
   u16 val = *value;
   u16 result = dst + val;
@@ -90,11 +238,11 @@ void ADD_R16_R16(u16* dest, u16* value) {
   cpu->main.singles.F.h = (dst & 0xF) + (val & 0xF) > 0xF;
 }
 
-void INC_R16(u16* reg) {
+INLINED void INC_R16(u16* reg) {
   *reg += 1;
 }
 
-void INC_R16a(u16 addr) {
+INLINED void INC_R16a(u16 addr) {
   u8 value = read_u16(addr);
   u8 result = value + 1;
   cpu->main.singles.F.n = 0;
@@ -105,7 +253,7 @@ void INC_R16a(u16 addr) {
   write_u8(addr, result);
 }
 
-void INC_R8(u8* reg) {
+INLINED void INC_R8(u8* reg) {
   u8 value = *reg;
   u8 result = value + 1;
   *reg = result;
@@ -116,7 +264,78 @@ void INC_R8(u8* reg) {
   cpu->main.singles.F.s = result >> 7;
 }
 
-void DEC_R8(u8* reg) {
+INLINED void ADD_R8_R8(u8* reg, u8 reg2) {
+  u8 reg1 = *reg;
+  u16 result = reg1 + reg2;
+  u8 newVal = result & 0xFF;
+  *reg = newVal;
+  cpu->main.singles.F.c = result > 0xFF;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.h = ((reg1 & 0xF) + (reg2 & 0xF)) > 0xF;
+  cpu->main.singles.F.z = newVal == 0;
+  cpu->main.singles.F.s = (newVal & 0x80) != 0;
+}
+
+INLINED void ADD_R8_N(u8* reg) {
+  ADD_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void ADC_R8_R8(u8* reg, u8 reg2) {
+  u8 reg1 = *reg;
+  u8 c = cpu->main.singles.F.c;
+  u16 result = reg1 + reg2 + c;
+  u8 newVal = result & 0xFF;
+  *reg = newVal;
+  cpu->main.singles.F.c = result > 0xFF;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.h = ((reg1 & 0xF) + (reg2 & 0xF) + c) > 0xF;
+  cpu->main.singles.F.z = newVal == 0;
+  cpu->main.singles.F.s = (newVal & 0x80) != 0;
+}
+
+INLINED void ADC_R8_N(u8* reg) {
+  ADC_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void ADC_R16_R16(u16* reg1, u16 reg2) {
+  int val = reg2 + cpu->main.singles.F.c;
+  u16 result = *reg1 + val;
+
+  cpu->main.singles.F.c = (val + *reg1) > 0xFFFF;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = ((reg2 ^ *reg1 ^ 0x8000) & (reg2 ^ result) & 0x8000);
+  cpu->main.singles.F.h = ((*reg1 & 0xFFF) + (val & 0xFFF)) > 0xFFF;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 15;
+
+  *reg1 = result;
+}
+
+INLINED void SUB_R8_N(u8* reg) {
+  SUB_R8_R8(reg, read_u8(cpu->PC));
+  cpu->PC += 1;
+}
+
+INLINED void SBC_R16_R16(u16* reg1, u16 reg2) {
+  int val = reg2 + cpu->main.singles.F.c;
+  u16 result = *reg1 - val;
+
+  cpu->main.singles.F.c = val > *reg1;
+  cpu->main.singles.F.n = 1;
+  cpu->main.singles.F.pv = (((reg2 ^ *reg1) & (*reg1 ^ result) & 0x8000)) >> 15;
+  cpu->main.singles.F.h = (*reg1 & 0xFFF) < (val & 0xFFF);
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 15;
+
+  *reg1 = result;
+}
+
+
+INLINED void DEC_R8(u8* reg) {
   u8 value = *reg;
   u8 result = value - 1;
   *reg = result;
@@ -127,7 +346,7 @@ void DEC_R8(u8* reg) {
   cpu->main.singles.F.s = result >> 7;
 }
 
-void DEC_R16a(u16 addr) {
+INLINED void DEC_R16a(u16 addr) {
   u8 value = read_u8(addr);
   u8 result = value - 1;
   write_u8(addr, result);
@@ -138,16 +357,16 @@ void DEC_R16a(u16 addr) {
   cpu->main.singles.F.s = result >> 7;
 }
 
-void DEC_R16(u16* reg) {
+INLINED void DEC_R16(u16* reg) {
   *reg -= 1;
 }
 
-void JR() {
+INLINED void JR() {
   s8 offset = (s8)read_u8(cpu->PC);
   cpu->PC += 1 + offset;
 }
 
-void JR_cond(bool condition) {
+INLINED void JR_cond(bool condition) {
   s8 offset = (s8)read_u8(cpu->PC);
   cpu->PC += 1;
   if (condition) {
@@ -156,9 +375,519 @@ void JR_cond(bool condition) {
   }
 }
 
-int execute_cpu() {
+INLINED u16 POP() {
+  u16 result = read_u16(cpu->SP);
+  cpu->SP += 2;
+  return result;  
+}
+
+INLINED void PUSH(u16 value) {
+  cpu->SP -= 2;
+  write_u16(cpu->SP, value);
+}
+
+INLINED void RST(u8 addr) {
+  PUSH(cpu->PC);
+  cpu->PC = addr;
+}
+
+INLINED void RET() {
+  cpu->PC = POP(); 
+}
+
+INLINED void RET_cond(bool condition) {
+  if (condition) {
+    bonus_cycles = 6;
+    RET();
+  }
+}
+
+INLINED void JP() {
+  cpu->PC = read_u16(cpu->PC);
+}
+
+INLINED void JP_cond(bool condition) {
+  if (condition) JP();
+}
+
+INLINED void CALL() {
+  PUSH(cpu->PC+2);
+  cpu->PC = read_u16(cpu->PC);
+}
+
+INLINED void CALL_cond(bool condition) {
+  if (condition) {
+    bonus_cycles = 7;
+    CALL();
+  }
+}
+
+INLINED void EI() {
+  cpu->FF1 = true;
+  cpu->FF2 = true;
+}
+
+INLINED void DI() {
+  cpu->FF1 = false;
+  cpu->FF2 = false;
+}
+
+int execute_ddfd(bool dd) {
+  u16* reg = dd ? &cpu->IX : &cpu->IY;
   u8 inst = read_u8(cpu->PC);
   cpu->PC++;
+  #define ADDR() *reg + read_u8(cpu->PC++)
+  switch (inst) {
+    case 0x09:  // add ixiy, bc
+      ADD_R16_R16(reg, &cpu->main.pairs.BC);
+      break;
+    case 0x19:  // add ixiy, de
+      ADD_R16_R16(reg, &cpu->main.pairs.DE);
+      break;
+    case 0x21:  // ld ixiy, nn
+      LD_R16_NN(reg);
+      break;
+    case 0x22:  // ld (nn), ixiy
+      LD_NN_R16(read_u16(cpu->PC), *reg);
+      break;
+    case 0x23:  // inc ixiy
+      INC_R16(reg);
+      break;
+    case 0x29:  // add ixiy, ixiy
+      ADD_R16_R16(reg, reg);
+      break;
+    case 0x2A:  // ld ix, (nn)
+      LD_R16_NN(reg);
+      break;
+    case 0x2B:  // dec ixiy
+      DEC_R16(reg);
+      break;
+    case 0x34:  // inc (ixiy + d)
+      INC_R16a(ADDR());
+      break;
+    case 0x35:  // dec (ixiy + d)
+      DEC_R16a(ADDR());
+      break;
+    case 0x36:  // ld (ixiy + d), n
+      write_u8(ADDR(), read_u8(cpu->PC));
+      cpu->PC++;
+      break;
+    case 0x39:  // add ixiy, sp
+      ADD_R16_R16(reg, &cpu->SP);
+      break;
+    case 0x46:  // ld b, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.B, ADDR());
+      break;
+    case 0x4E:  // ld c, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.C, ADDR());
+      break;
+    case 0x56:  // ld d, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.D, ADDR());
+      break;
+    case 0x5E:  // ld e, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.E, ADDR());
+      break;
+    case 0x66:  // ld h, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.H, ADDR());
+      break;
+    case 0x6E:  // ld l, (ixiy + d)
+      LD_R8_R16(&cpu->main.singles.L, ADDR());
+      break;
+    case 0x70:  // ld (ix+d), b
+      LD_R16_R8(ADDR(), cpu->main.singles.B);
+      break;
+    case 0x71:  // ld (ix+d), c
+      LD_R16_R8(ADDR(), cpu->main.singles.C);
+      break;
+    case 0x72:  // ld (ix+d), d
+      LD_R16_R8(ADDR(), cpu->main.singles.D);
+      break;
+    case 0x73:  // ld (ix+d), e
+      LD_R16_R8(ADDR(), cpu->main.singles.E);
+      break;
+    case 0x74:  // ld (ix+d), h
+      LD_R16_R8(ADDR(), cpu->main.singles.H);
+      break;
+    case 0x75:  // ld (ix+d), l
+      LD_R16_R8(ADDR(), cpu->main.singles.L);
+      break;
+    case 0x77:  // ld (ix+d), a
+      LD_R16_R8(ADDR(), cpu->main.singles.A);
+      break;
+    case 0x7E:  // ld a, (ix+d)
+      LD_R8_R16(&cpu->main.singles.A, ADDR());
+      break;
+    case 0x86:  // add a, (ix+d)
+      ADD_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0x8E:  // adc a, (ix+d)
+      ADC_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0x96:  // sub (ix+d)
+      SUB_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0x9E:  // sbc a, (ix+d)
+      SUB_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0xA6:  // and (ix+d)
+      AND_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0xAE:  // xor (ix+d)
+      XOR_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0xB6:  // or (ix+d)
+      OR_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0xBE:  // cp (ix+d)
+      CP_R8_R8(&cpu->main.singles.A, ADDR());
+      break;
+    case 0xCB:  // cb ix
+      execute_displacedcb(reg);
+      break;
+    case 0xE1:  // pop ix
+      *reg = POP();
+      break;
+    case 0xE3:{  // ex (sp), iy
+      u16 tmp = read_u16(cpu->SP);
+      cpu->SP = *reg;
+      *reg = tmp;
+      break;
+    }
+    case 0xE5:  // push ix
+      PUSH(*reg);
+      break;
+    case 0xE9:  // jp (ix)
+      cpu->PC = read_u16(*reg);
+      break;
+    case 0xF9:  // ld sp, ix
+      cpu->SP = *reg;
+      break;
+  }
+  int result = cycles_ixiy[inst] + bonus_cycles;
+  bonus_cycles = 0;
+  return result;
+}
+
+INLINED void IN_R8_R8(u8* reg, u8 port) {
+  u8 val = read_io(port);
+  *reg = val;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(val);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.s = val >> 7;
+  cpu->main.singles.F.z = val == 0;
+}
+
+int execute_ed() {
+  u8 inst = read_u8(cpu->PC++);
+  switch (inst) {
+    case 0x40:
+      IN_R8_R8(&cpu->main.singles.B, cpu->main.singles.C);
+      break;
+    case 0x41:
+      write_io(cpu->main.singles.C, cpu->main.singles.B);
+      break;
+    case 0x42:
+      SBC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.BC);
+      break;
+    case 0x43:
+      LD_NN_R16(read_u16(cpu->PC), cpu->main.pairs.BC);
+      break;
+    case 0x44:
+      _SUB_8(0, cpu->main.singles.A);
+      break;
+    case 0x45:
+      cpu->PC = POP();
+      cpu->FF1 = cpu->FF2;
+      break;
+    case 0x47:
+      LD_R8_R8(&cpu->I, cpu->main.singles.A);
+      break;
+    case 0x48:
+      IN_R8_R8(&cpu->main.singles.C, cpu->main.singles.C);
+      break;
+    case 0x49:
+      write_io(cpu->main.singles.C, cpu->main.singles.C);
+      break;
+    case 0x4A:
+      ADC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.BC);
+      break;
+    case 0x4B:
+      LD_R16_NNa(&cpu->main.pairs.BC);
+      break;
+    case 0x4D:
+      cpu->PC = POP();
+      cpu->FF1 = 1;
+      break;
+    case 0x4F:
+      LD_R8_R8(&cpu->R, cpu->main.singles.A);
+      break;
+    case 0x50:
+      IN_R8_R8(&cpu->main.singles.D, cpu->main.singles.C);
+      break;
+    case 0x51:
+      write_io(cpu->main.singles.C, cpu->main.singles.D);
+      break;
+    case 0x52:
+      SBC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.DE);
+      break;
+    case 0x53:
+      LD_NN_R16(read_u16(cpu->PC), cpu->main.pairs.DE);
+      break;
+    case 0x57:
+      LD_R8_R8(&cpu->main.singles.A, cpu->I);
+      break;
+    case 0x58:
+      IN_R8_R8(&cpu->main.singles.E, cpu->main.singles.C);
+      break;
+    case 0x59:
+      write_io(cpu->main.singles.C, cpu->main.singles.E);
+      break;
+    case 0x5A:
+      ADC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.BC);
+      break;
+    case 0x5B:
+      LD_R16_NNa(&cpu->main.pairs.DE);
+      break;
+    case 0x5F:
+      LD_R8_R8(&cpu->main.singles.A, cpu->R);
+      break;
+    case 0x60:
+      IN_R8_R8(&cpu->main.singles.H, cpu->main.singles.C);
+      break;
+    case 0x61:
+      write_io(cpu->main.singles.C, cpu->main.singles.H);
+      break;
+    case 0x62:
+      SBC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.HL);
+      break;
+    case 0x67: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.HL, (cpu->main.singles.A << 4) | (val >> 4));
+      u8 result = (cpu->main.singles.A & 0xF0) | (val & 0x0F);
+      cpu->main.singles.A = result;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.pv = parity(result);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      break; 
+    }
+    case 0x68:
+      IN_R8_R8(&cpu->main.singles.L, cpu->main.singles.C);
+      break;
+    case 0x69:
+      write_io(cpu->main.singles.C, cpu->main.singles.L);
+      break;
+    case 0x6A:
+      ADC_R16_R16(&cpu->main.pairs.HL, cpu->main.pairs.HL);
+      break;
+    case 0x6F: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.HL, (cpu->main.singles.A & 0x0F) | (val << 4));
+      u8 result = (cpu->main.singles.A & 0xF0) | (val >> 4);
+      cpu->main.singles.A = result;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.pv = parity(result);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      break; 
+    }
+    case 0x72:
+      SBC_R16_R16(&cpu->main.pairs.HL, cpu->SP);
+      break;
+    case 0x73:
+      LD_NN_R16(read_u16(cpu->PC), cpu->SP);
+      break;
+    case 0x78:
+      IN_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0x79:
+      write_io(cpu->main.singles.C, cpu->main.singles.A);
+      break;
+    case 0x7A:
+      ADC_R16_R16(&cpu->main.pairs.HL, cpu->SP);
+      break;
+    case 0x7B:
+      LD_R16_NNa(&cpu->SP);
+      break;
+    case 0xA0:
+      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL++;
+      cpu->main.pairs.DE++;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      break;
+    case 0xA1: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      u8 result = cpu->main.singles.A - val;
+      cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      cpu->main.pairs.HL++;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      break;
+    }
+    case 0xA2:
+      write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
+      cpu->main.pairs.HL++;
+      cpu->main.singles.B--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      break;
+    case 0xA3:
+      cpu->main.singles.B--;
+      write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL++;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      break;
+    case 0xA8:
+      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL--;
+      cpu->main.pairs.DE--;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      break;
+    case 0xA9: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      u8 result = cpu->main.singles.A - val;
+      cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      cpu->main.pairs.HL--;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      break;
+    }
+    case 0xAA:
+      write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
+      cpu->main.pairs.HL--;
+      cpu->main.singles.B--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      break;
+    case 0xAB:
+      cpu->main.singles.B--;
+      write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      break;
+    case 0xB0:
+      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL++;
+      cpu->main.pairs.DE++;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      if (cpu->main.pairs.BC != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    case 0xB1: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      u8 result = cpu->main.singles.A - val;
+      cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      cpu->main.pairs.HL++;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      if (cpu->main.pairs.BC != 0 && cpu->main.singles.F.z != 1) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    }
+    case 0xB2:
+      write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
+      cpu->main.pairs.HL++;
+      cpu->main.singles.B--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      if (cpu->main.singles.B != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    case 0xB3:
+      cpu->main.singles.B--;
+      write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL++;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      if (cpu->main.singles.B != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    case 0xB8:
+      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL--;
+      cpu->main.pairs.DE--;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.n = 0;
+      cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      if (cpu->main.pairs.BC != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    case 0xB9: {
+      u8 val = read_u8(cpu->main.pairs.HL);
+      u8 result = cpu->main.singles.A - val;
+      cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
+      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.s = result >> 7;
+      cpu->main.pairs.HL--;
+      cpu->main.pairs.BC--;
+      cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      if (cpu->main.pairs.BC != 0 && cpu->main.singles.F.z != 1) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    }
+    case 0xBA:
+      write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
+      cpu->main.pairs.HL--;
+      cpu->main.singles.B--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      if (cpu->main.singles.B != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+    case 0xBB:
+      cpu->main.singles.B--;
+      write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
+      cpu->main.pairs.HL--;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.z = cpu->main.singles.B == 0;
+      if (cpu->main.singles.B != 0) {
+        bonus_cycles = 5;
+        cpu->PC -= 2;
+      }
+      break;
+      
+
+
+
+  }
+  return cycles_ed[inst];
+}
+
+int execute_cpu() {
+  u8 inst = read_u8(cpu->PC++);
 
   switch (inst) {
     case 0x01:  // ld bc, nn
@@ -242,7 +971,7 @@ int execute_cpu() {
     case 0x16:  // ld d, n
       LD_R8_N(&cpu->main.singles.D);
       break;
-    case 0x17:  // rla
+    case 0x17:{  // rla
       u8 a = cpu->main.singles.A;
       u8 c = (a & 0x80) >> 7;
       a = a << 1 | cpu->main.singles.F.c;
@@ -250,6 +979,7 @@ int execute_cpu() {
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
       return 4;
+    }
     case 0x18:  // jr d
       JR();
       break;
@@ -352,8 +1082,8 @@ int execute_cpu() {
     case 0x30:  // jr nc, d
       JR_cond(!cpu->main.singles.F.c);
       break;
-    case 0x31:  // ld af, nn
-      LD_R16_NN(&cpu->main.pairs.AF);
+    case 0x31:  // ld sp, nn
+      LD_R16_NN(&cpu->SP);
       break;
     case 0x32:  // ld (nn), a
       LD_NN_R8(cpu->main.singles.A);
@@ -367,7 +1097,7 @@ int execute_cpu() {
     case 0x35:  // dec (hl)
       DEC_R16a(cpu->main.pairs.HL);
       break;
-    case 0x36:  // ld (hn), n
+    case 0x36:  // ld (hl), n
       write_u8(cpu->main.pairs.HL, read_u8(cpu->PC));
       cpu->PC+=1;
       break;
@@ -588,8 +1318,675 @@ int execute_cpu() {
     case 0x7E:  // ld a, (hl)
       LD_R8_R16(&cpu->main.singles.A, cpu->main.pairs.HL);
       break;
+    case 0x7F:  // ld a, a
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0x80:  // add a, b
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0x81:  // add a, c
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0x82:  // add a, d
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0x83:  // add a, e
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0x84:  // add a, h
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0x85:  // add a, l
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0x86:  // add a, (hl)
+      ADD_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0x87:  // add a, a
+      ADD_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0x88:  // adc a, b
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0x89:  // adc a, c
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0x8A:  // adc a, d
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0x8B:  // adc a, e
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0x8C:  // adc a, h
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0x8D:  // adc a, l
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0x8E:  // adc a, (hl)
+      ADC_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0x8F:  // adc a, a
+      ADC_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0x90:  // sub b
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0x91:  // sub c
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0x92:  // sub d
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0x93:  // sub e
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0x94:  // sub h
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0x95:  // sub l
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0x96:  // sub (hl)
+      SUB_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0x97:  // sub a
+      SUB_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0x98:  // sbc a, b
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0x99:  // sbc a, c
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0x9A:  // sbc a, d
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0x9B:  // sbc a, e
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0x9C:  // sbc a, h
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0x9D:  // sbc a, l
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0x9E:  // sbc a, (hl)
+      SBC_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0x9F:  // sbc a, a
+      SBC_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0xA0:  // and b
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0xA1:  // and c
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0xA2:  // and d
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0xA3:  // and e
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0xA4:  // and h
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0xA5:  // and l
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0xA6:  // and (hl)
+      AND_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0xA7:  // and a
+      AND_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0xA8:  // xor b
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0xA9:  // xor c
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0xAA:  // xor d
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0xAB:  // xor e
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0xAC:  // xor h
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0xAD:  // xor l
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0xAE:  // xor (hl)
+      XOR_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0xAF:  // xor a
+      XOR_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0xB0:  // or b
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0xB1:  // or c
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0xB2:  // or d
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0xB3:  // or e
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0xB4:  // or h
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0xB5:  // or l
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0xB6:  // or (hl)
+      OR_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0xB7:  // or a
+      OR_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0xB8:  // cp b
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
+      break;
+    case 0xB9:  // cp c
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
+      break;
+    case 0xBA:  // cp d
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
+      break;
+    case 0xBB:  // cp e
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
+      break;
+    case 0xBC:  // cp h
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
+      break;
+    case 0xBD:  // cp l
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
+      break;
+    case 0xBE:  // cp (hl)
+      CP_R8_R8(&cpu->main.singles.A, read_u8(cpu->main.pairs.HL));
+      break;
+    case 0xBF:  // cp a
+      CP_R8_R8(&cpu->main.singles.A, cpu->main.singles.A);
+      break;
+    case 0xC0:  // ret nz
+      RET_cond(!cpu->main.singles.F.z);
+      break;
+    case 0xC1:  // pop bc
+      cpu->main.pairs.BC = POP();
+      break;
+    case 0xC2:  // jp nz, nn
+      JP_cond(!cpu->main.singles.F.z);
+      break;
+    case 0xC3:  // jp nn
+      JP();
+      break;
+    case 0xC4:  // call nz, nn
+      CALL_cond(!cpu->main.singles.F.z);
+      break;
+    case 0xC5:  // push bc
+      PUSH(cpu->main.pairs.BC);
+      break;
+    case 0xC6:  // add a, n
+      ADD_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xC7:  // rst 00h
+      RST(0);
+      break;
+    case 0xC8:  // ret z
+      RET_cond(cpu->main.singles.F.z);
+      break;
+    case 0xC9:  // ret
+      RET();
+      break;
+    case 0xCA:  // jp z, nn
+      JP_cond(cpu->main.singles.F.z);
+      break;
+    case 0xCB:  // CB instructions
+      return execute_cb();
+    case 0xCC:  // call z, nn
+      CALL_cond(cpu->main.singles.F.z);
+      break;
+    case 0xCD:  // call nn
+      CALL();
+      break;
+    case 0xCE:  // adc a, n
+      ADC_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xCF:  // rst 08h
+      RST(8);
+      break;
+    case 0xD0:  // ret nc
+      RET_cond(!cpu->main.singles.F.c);
+      break;
+    case 0xD1:  // pop de
+      cpu->main.pairs.DE = POP();
+      break;
+    case 0xD2:  // jp nc, nn
+      JP_cond(!cpu->main.singles.F.c);
+      break;
+    case 0xD3:  // out (n), a
+      write_io(read_u8(cpu->PC), cpu->main.singles.A);
+      cpu->PC += 1;
+      break;
+    case 0xD4:  // call nc, nn
+      CALL_cond(!cpu->main.singles.F.c);
+      break;
+    case 0xD5:  // push de
+      PUSH(cpu->main.pairs.DE);
+      break;
+    case 0xD6:  // sub n
+      SUB_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xD7:  // rst 10h
+      RST(0x10);
+      break;
+    case 0xD8:  // ret c
+      RET_cond(cpu->main.singles.F.c);
+      break;
+    case 0xD9: {// exx
+      u16 temp = cpu->alt.pairs.BC;
+      cpu->alt.pairs.BC = cpu->main.pairs.BC;
+      cpu->main.pairs.BC = temp;
+      temp = cpu->alt.pairs.DE;
+      cpu->alt.pairs.DE = cpu->main.pairs.DE;
+      cpu->main.pairs.DE = temp;
+      temp = cpu->alt.pairs.HL;
+      cpu->alt.pairs.HL = cpu->main.pairs.HL;
+      cpu->main.pairs.HL = temp;
+      break;
+    }
+    case 0xDA:  // jp c, nn
+      JP_cond(cpu->main.singles.F.c);
+      break;
+    case 0xDB:  // in a, (n)
+      cpu->main.singles.A = read_io(cpu->PC);
+      cpu->PC += 1;
+      break;
+    case 0xDC:  // call c, nn
+      CALL_cond(cpu->main.singles.F.c);
+      break;
+    case 0xDD:  // dd instructions
+      return execute_ddfd(true);
+    case 0xDE:  // sbc a, n
+      SBC_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xDF:  // rst 18h
+      RST(0x18);
+      break;
+    case 0xE0:  // ret po
+      RET_cond(!cpu->main.singles.F.pv);
+      break;
+    case 0xE1:  // pop hl
+      cpu->main.pairs.HL = POP();
+      break;
+    case 0xE2:  // jp po, nn
+      JP_cond(!cpu->main.singles.F.pv);
+      break;
+    case 0xE3: {// ex (sp), hl
+      u16 tmp = read_u16(cpu->SP);
+      write_u16(cpu->SP, cpu->main.pairs.HL);
+      cpu->main.pairs.HL = tmp;
+    }
+    case 0xE4:  // call po, nn
+      CALL_cond(!cpu->main.singles.F.pv);
+      break;
+    case 0xE5:  // push hl
+      PUSH(cpu->main.pairs.HL);
+      break;
+    case 0xE6:  // and n
+      AND_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xE7:  // rst 20h
+      RST(0x20);
+      break;
+    case 0xE8:  // ret pe
+      RET_cond(cpu->main.singles.F.pv);
+      break;
+    case 0xE9:  // jp (hl)
+      cpu->PC = read_u16(cpu->main.pairs.HL);
+      break;
+    case 0xEA:  // jp pe, nn
+      JP_cond(cpu->main.singles.F.pv);
+      break;
+    case 0xEB: {// ex de, hl
+      u16 tmp = cpu->main.pairs.HL;
+      cpu->main.pairs.HL = cpu->main.pairs.DE;
+      cpu->main.pairs.DE = tmp;
+    }
+    case 0xEC:  // call pe, nn
+      CALL_cond(cpu->main.singles.F.pv);
+      break;
+    case 0xED: // ed instructions
+      return execute_ed();
+    case 0xEE: // xor n
+      XOR_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xEF: // rst 28h
+      RST(0x28);
+      break;
+    case 0xF0:  // ret p
+      RET_cond(!cpu->main.singles.F.n);
+      break;
+    case 0xF1:  // pop hl
+      cpu->main.pairs.AF = POP();
+      break;
+    case 0xF2:  // jp p, nn
+      JP_cond(!cpu->main.singles.F.n);
+      break;
+    case 0xF3:  // di
+      DI();
+      break;
+    case 0xF4:  // call p, nn
+      CALL_cond(!cpu->main.singles.F.n);
+      break;
+    case 0xF5:  // push af
+      PUSH(cpu->main.pairs.AF);
+      break;
+    case 0xF6:  // or n
+      OR_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xF7:  // rst 30h
+      RST(0x30);
+    case 0xF8:  // ret m
+      RET_cond(cpu->main.singles.F.n);
+      break;
+    case 0xF9:  // ld sp, hl
+      cpu->SP = cpu->main.pairs.HL;
+      break;
+    case 0xFA:  // jp m, nn
+      JP_cond(cpu->main.singles.F.n);
+      break;
+    case 0xFB:  // ei
+      EI();
+      break;
+    case 0xFC:  // call m, nn
+      CALL_cond(cpu->main.singles.F.n);
+      break;
+    case 0xFD:  // fd instructions
+      execute_ddfd(false);
+      break;
+    case 0xFE:  // cp n
+      CP_R8_N(&cpu->main.singles.A);
+      break;
+    case 0xFF:  // rst 38h
+      RST(0x38);
+      break;
   }
-  int cycles = opcode_cycles[inst] + bonus_cycles;
+  int result = cycles[inst] + bonus_cycles;
   bonus_cycles = 0;
-  return cycles;
+  return result;
 }
+
+INLINED u8 _RLC(u8 val) {
+  u8 result = ((val << 1) & 0xFF) | ((val & 0x80) >> 7);
+  cpu->main.singles.F.c = result & 1;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void RLC_R8(u8* reg) {
+    *reg = _RLC(*reg);
+}
+
+INLINED void RLC_R16(u16 addr) {
+  write_u8(addr, _RLC(read_u8(addr)));
+}
+
+INLINED u8 _RRC(u8 val) {
+  u8 result = ((val >> 1) & 0xFF) | ((val & 1) << 7);
+  cpu->main.singles.F.c = val & 1;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void RRC_R8(u8* reg) {
+    *reg = _RRC(*reg);
+}
+
+INLINED void RRC_R16(u16 addr) {
+  write_u8(addr, _RRC(read_u8(addr)));
+}
+
+INLINED u8 _RL(u8 val) {
+  u8 result = ((val << 1) & 0xFF)| cpu->main.singles.F.c;
+  cpu->main.singles.F.c = (val & 0x80) >> 7;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void RL_R8(u8* reg) {
+    *reg = _RL(*reg);
+}
+
+INLINED void RL_R16(u16 addr) {
+  write_u8(addr, _RL(read_u8(addr)));
+}
+
+INLINED u8 _RR(u8 val) {
+  u8 result = ((val >> 1) & 0xFF) | (cpu->main.singles.F.c << 7);
+  cpu->main.singles.F.c = val & 1;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void RR_R8(u8* reg) {
+    *reg = _RR(*reg);
+}
+
+INLINED void RR_R16(u16 addr) {
+  write_u8(addr, _RR(read_u8(addr)));
+}
+
+
+INLINED u8 _SLA(u8 val) {
+  u8 result = (val << 1) & 0xFF;
+  cpu->main.singles.F.c = (val & 0x80) >> 7;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void SLA_R8(u8* reg) {
+    *reg = _SLA(*reg);
+}
+
+INLINED void SLA_R16(u16 addr) {
+  write_u8(addr, _SLA(read_u8(addr)));
+}
+
+
+INLINED u8 _SRA(u8 val) {
+  u8 result = ((val >> 1) & 0xFF) | (val & 0x80);
+  cpu->main.singles.F.c = val & 1;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void SRA_R8(u8* reg) {
+    *reg = _SRA(*reg);
+}
+
+INLINED void SRA_R16(u16 addr) {
+  write_u8(addr, _SRA(read_u8(addr)));
+}
+
+INLINED u8 _SRL(u8 val) {
+  u8 result = (val >> 1) & 0xFF;
+  cpu->main.singles.F.c = val & 1;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  return result;
+}
+
+INLINED void SRL_R8(u8* reg) {
+    *reg = _SRL(*reg);
+}
+
+INLINED void SRL_R16(u16 addr) {
+  write_u8(addr, _SRL(read_u8(addr)));
+}
+
+INLINED void BIT(u8 val, int bitNum) {
+  u8 bit = val >> bitNum;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.h = 1;
+  cpu->main.singles.F.z = bit == 0;
+}
+
+INLINED u8 _RES(u8 val, int bitNum) {
+  return val & ~(1 << bitNum);
+}
+
+INLINED void RES_R8(u8* reg, int bitNum) {
+  *reg = _RES(*reg, bitNum);
+}
+
+INLINED void RES_R16(u16 addr, int bitNum) {
+  write_u8(addr, _RES(read_u8(addr), bitNum));
+}
+
+INLINED u8 _SET(u8 val, int bitNum) {
+  return val | (1 << bitNum);
+}
+
+INLINED void SET_R8(u8* reg, int bitNum) {
+  *reg = _SET(*reg, bitNum);
+}
+
+INLINED void SET_R16(u16 addr, int bitNum) {
+  write_u8(addr, _SET(read_u8(addr), bitNum));
+}
+
+int execute_cb() {
+  // trying to implement decoding to make the process easier
+  u8 inst = read_u8(cpu->PC++);
+  u8* reg = 0;
+  u8 regNum = inst & 7;
+  switch (regNum) {
+    case 0: reg = &cpu->main.singles.B; break;
+    case 1: reg = &cpu->main.singles.C; break;
+    case 2: reg = &cpu->main.singles.D; break;
+    case 3: reg = &cpu->main.singles.E; break;
+    case 4: reg = &cpu->main.singles.H; break;
+    case 5: reg = &cpu->main.singles.L; break;
+    case 7: reg = &cpu->main.singles.A; break;
+  }
+
+  if (inst < 0x40) {
+    switch ((inst & 0b00111000) >> 3) {
+      case 0: 
+        if (reg) RLC_R8(reg);
+        else RLC_R16(cpu->main.pairs.HL);
+        break;
+      case 1: 
+        if (reg) RRC_R8(reg);
+        else RRC_R16(cpu->main.pairs.HL);
+        break;
+      case 2: 
+        if (reg) RL_R8(reg);
+        else RL_R16(cpu->main.pairs.HL);
+        break;
+      case 3: 
+        if (reg) RR_R8(reg);
+        else RR_R16(cpu->main.pairs.HL);
+        break;
+      case 4: 
+        if (reg) SLA_R8(reg);
+        else SLA_R16(cpu->main.pairs.HL);
+        break;
+      case 5: 
+        if (reg) SRA_R8(reg);
+        else SRA_R16(cpu->main.pairs.HL);
+        break;
+      case 7: 
+        if (reg) SRL_R8(reg);
+        else SRL_R16(cpu->main.pairs.HL);
+        break;
+    }
+  }
+
+  else if (inst < 0x80) {
+    u8 bitNum = (inst & 0b00111000) >> 3;
+    if (reg) BIT(*reg, bitNum);
+    else BIT(read_u8(cpu->main.pairs.HL), bitNum);
+  }
+  
+  else if (inst < 0xC0) {
+    u8 bitNum = (inst & 0b00111000) >> 3;
+    if (reg) RES_R8(reg, bitNum);
+    else RES_R16(cpu->main.pairs.HL, bitNum);
+  }
+
+  else if (inst < 0xC0) {
+    u8 bitNum = (inst & 0b00111000) >> 3;
+    if (reg) SET_R8(reg, bitNum);
+    else SET_R16(cpu->main.pairs.HL, bitNum);
+  }
+
+  return cycles_cb[inst];
+}
+
+int execute_displacedcb(u16* reg) {
+  u8 inst = read_u8(cpu->PC++);
+  int bitNum = (inst & 0b00111000) >> 3;
+  if (inst < 0x40) {
+    switch (inst) {
+      case 0x06:
+        RLC_R16(ADDR());
+        break;
+      case 0x0e: 
+        RRC_R16(ADDR());
+        break;
+      case 0x16:
+        RL_R16(ADDR());
+        break;
+      case 0x1E:
+        RR_R16(ADDR());
+        break;
+      case 0x26:
+        SLA_R16(ADDR());
+        break;
+      case 0x2E:
+        SRA_R16(ADDR());
+        break;
+      case 0x3E:
+        SRL_R16(ADDR());
+        break;
+    }
+  }
+  else if (inst < 0x80) BIT(read_u8(ADDR()), bitNum);
+  else if (inst < 0xC0) RES_R16(ADDR(), bitNum);
+  else SET_R16(ADDR(), bitNum);
+  return cycles_cb[inst];
+} 

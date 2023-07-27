@@ -4,7 +4,6 @@
 
 typedef union {
   struct {
-    u8 A;
     struct { 
       bool c : 1;
       bool n : 1;
@@ -15,12 +14,13 @@ typedef union {
       bool z : 1;
       bool s : 1;
     } F;
-    u8 B;
+    u8 A;
     u8 C;
-    u8 D;
+    u8 B;
     u8 E;
-    u8 H;
+    u8 D;
     u8 L;
+    u8 H;
   } singles;
   struct {
     u16 AF;
@@ -39,6 +39,8 @@ typedef struct {
   u8 I;
   u8 R;
   u16 PC;
+  bool FF1;
+  bool FF2;
 } Z80;
 
 typedef struct {
@@ -47,3 +49,5 @@ typedef struct {
 } Emu;
 
 void emu_loop(Emu* emu);
+void pause();
+void check_interrupts(Emu* emu);

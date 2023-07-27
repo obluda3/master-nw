@@ -1,5 +1,6 @@
 #include "emu.h"
 #include <string.h>
+#include "vdp.h"
 
 Memory* mem;
 
@@ -7,6 +8,7 @@ u8 slot1 = 0;
 u8 slot2 = 1;
 u8 slot3 = 2;
 u8 ram_bank = 0;
+u8 current_keys = 0;
 bool ram_slot3 = false;
 
 void init_mem(Memory* memory, const char* cartridge) {
@@ -16,6 +18,7 @@ void init_mem(Memory* memory, const char* cartridge) {
 }
 
 void update_pages(u16 addr, u8 data) {
+  data &= 0x1F;
   if (addr == 0xFFFC) {
     ram_slot3 = (data & 8) == 8;
     if (ram_slot3)
@@ -72,4 +75,37 @@ u16 read_u16(u16 addr) {
 void write_u16(u16 addr, u16 data) {
   write_u8(addr, data & 0xFF);
   write_u8(addr + 1, (data & 0xFF00) >> 8);
+}
+
+u8 read_io(u16 addr) {
+  switch (addr) {/*
+    case 0xDC: case 0xC0:
+      return current_keys;
+    case 0xBE:
+      return get_dataport();
+    case 0xBF:
+      return get_statusregister();*/
+    default: 
+      return 0;
+  }
+}
+
+void set_input(eadk_keyboard_state_t keyboardState) {
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
+}
+
+void write_io(u16 addr, u8 value) {/*
+  switch (addr) {
+    case 0xBE:
+      process_datawrite(value);
+      break;
+    case 0xBF:
+      process_controlwrite(value);
+      break;
+  }*/
 }
