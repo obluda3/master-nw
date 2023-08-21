@@ -101,7 +101,7 @@ int opcode_cycles[] = {};
 INLINED void SBC_R8_R8(u8* reg, u8 reg2) {
   u8 reg1 = *reg;
   u8 c = cpu->main.singles.F.c;
-  u16 result = reg1 - reg2 - c;
+  s16 result = reg1 - reg2 - c;
   u8 newVal = result & 0xFF;
   *reg = newVal;
   cpu->main.singles.F.c = result < 0;
@@ -160,7 +160,7 @@ INLINED void OR_R8_N(u8* reg) {
 }
 
 u8 _SUB_8(u8 op1, u8 op2) {
-  u16 result = op1 - op2;
+  s16 result = op1 - op2;
   u8 newVal = result & 0xFF;
   cpu->main.singles.F.c = result < 0;
   cpu->main.singles.F.n = 1;
@@ -1298,22 +1298,22 @@ int execute_cpu() {
       LD_R16_R8(cpu->main.pairs.HL, cpu->main.singles.A);
       break;
     case 0x78:  // ld a, b
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.B);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.B);
       break;
     case 0x79:  // ld a, c
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.C);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.C);
       break;
     case 0x7A:  // ld a, d
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.D);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.D);
       break;
     case 0x7B:  // ld a, e
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.E);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.E);
       break;
     case 0x7C:  // ld a, h
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.H);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.H);
       break;
     case 0x7D:  // ld a, l
-      LD_R8_R8(&cpu->main.singles.E, cpu->main.singles.L);
+      LD_R8_R8(&cpu->main.singles.A, cpu->main.singles.L);
       break;
     case 0x7E:  // ld a, (hl)
       LD_R8_R16(&cpu->main.singles.A, cpu->main.pairs.HL);
@@ -1631,6 +1631,7 @@ int execute_cpu() {
       u16 tmp = read_u16(cpu->SP);
       write_u16(cpu->SP, cpu->main.pairs.HL);
       cpu->main.pairs.HL = tmp;
+      break;
     }
     case 0xE4:  // call po, nn
       CALL_cond(!cpu->main.singles.F.pv);
@@ -1657,6 +1658,7 @@ int execute_cpu() {
       u16 tmp = cpu->main.pairs.HL;
       cpu->main.pairs.HL = cpu->main.pairs.DE;
       cpu->main.pairs.DE = tmp;
+      break;
     }
     case 0xEC:  // call pe, nn
       CALL_cond(cpu->main.singles.F.pv);
@@ -1692,6 +1694,7 @@ int execute_cpu() {
       break;
     case 0xF7:  // rst 30h
       RST(0x30);
+      break;
     case 0xF8:  // ret m
       RET_cond(cpu->main.singles.F.n);
       break;
