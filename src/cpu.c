@@ -1604,7 +1604,7 @@ int execute_cpu() {
       JP_cond(cpu->main.singles.F.c);
       break;
     case 0xDB:  // in a, (n)
-      cpu->main.singles.A = read_io(cpu->PC);
+      cpu->main.singles.A = read_io(read_u8(cpu->PC));
       cpu->PC += 1;
       break;
     case 0xDC:  // call c, nn
