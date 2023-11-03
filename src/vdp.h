@@ -5,12 +5,13 @@ typedef struct {
   u8 vram[0x4000];
   u8 cram[0x20];
   u8 vcounter;
-  u8 hcounter;
-  u16 width;
-  u16 height;
+  u16 realVcounter;
+  u16 hcounter;
   u8 registers[11];
   u8 statusReg;
   bool requestInterrupt;
+  u8 lineInterrupt;
+  u8 vscroll;
 } VDP;
 
 void init_vdp(VDP* _vdp);

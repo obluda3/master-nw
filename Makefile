@@ -14,6 +14,7 @@ src = $(addprefix src/,\
 	cpu.c, \
 	emu.c, \
 	mem.c, \
+	vdp.c, \
 )
 
 CFLAGS = -std=c99

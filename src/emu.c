@@ -1,8 +1,9 @@
 #include "emu.h"
 #include "cpu.h"
 #include <stdio.h>
+#include "vdp.h"
 #include <string.h>
-
+/*
 void emu_loop(Emu* emu) {
   bool quitting = false;
   bool slow = true;
@@ -55,9 +56,10 @@ void emu_loop(Emu* emu) {
     execute_cpu();
     if (slow) eadk_timing_msleep(500);
   }
-}
-/*
-void loop(Emu* emu) {
+}*/
+
+
+void emu_loop(Emu* emu) {
   bool quitting = false;
   int frame = 0;
   const float ticksPerFrame = 10738580 / 60;
@@ -71,8 +73,9 @@ void loop(Emu* emu) {
       char message[60];
      
       int cpuTicks = execute_cpu(&emu->cpu);
-      float vdpCycles = 
       int machineTicks = cpuTicks * 3;
+      float vdpCycles = machineTicks / 2;
+      vdp_update(vdpCycles);
       currentFrameTicks += machineTicks;
     }
     
@@ -84,4 +87,4 @@ void loop(Emu* emu) {
 
 void check_interrupts(Emu* emu) {
   
-}*/
+}

@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include "mem.h"
+#include "vdp.h"
 
 typedef union {
   struct {
@@ -46,6 +47,7 @@ typedef struct {
 typedef struct {
   Z80 cpu;
   Memory mem;
+  VDP vdp;
 } Emu;
 
 void emu_loop(Emu* emu);

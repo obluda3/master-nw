@@ -1,14 +1,18 @@
 #include "vdp.h"
 #include <stdio.h>
+#include <eadk.h>
 #include <string.h>
 #include <math.h>
+#define VDP_WIDTH 256
+#define VDP_HEIGHT 192
+
 VDP* vdp;
 bool waitingForWrite = false;
 bool writeCram = false;
 u16 fullCommand = 0;
 u8 readBuffer = 0;
 
-bool inline get_bit(u8 data, int bitnum) { (data >> bitnum) & 1; }
+bool inline get_bit(u8 data, int bitnum) { return (data >> bitnum) & 1; }
 u16 inline address_register() { return fullCommand & 0x3FFF; }
 
 void inline increment() { 
@@ -61,17 +65,74 @@ void process_datawrite(u8 byte) {
   increment();
 }
 
+u16 get_sprite_address_table() {
+  return (vdp->registers[5] & 0x7E) << 7;
+}
+
+u16 get_color(int index, bool sprite) {
+  u8 clr = vdp->cram[16*sprite+index];
+
+  // convert to rgb565
+  u8 r = clr & 0x3;
+  u8 g = clr & 0xC;
+  u8 b = clr & 0x30;
+  u8 _r = (r * 31 / 3) & 0x1F;
+  u8 _g = (g * 63 / 3) & 0x3F;
+  u8 _b = (b * 31 / 3) & 0x1F;
+  return (_r << 11) | (_g << 5) | _b; 
+}
+
+
 void render_frame() {
+  if (get_bit(vdp->registers[1], 6))
+    return;
+  bool sprite_pixels[VDP_WIDTH] = {0};
+  u16 lineBuffer[VDP_WIDTH] = {0};
 
-}
-
-u8 get_statusregister() {
+  // render background
   
+  bool modified = false;
+  // render sprites
+  u8* satBase = &vdp->vram[get_sprite_address_table() + 128];
+  int y = vdp->realVcounter;
+  for (int i = 0; i < 64; i++) {
+    s8 spriteY = vdp->vram[i] + 1;
+    s16 spriteX = *(satBase + 2*i);
+    if (get_bit(vdp->registers[0], 3))
+      spriteX -= 8;
+
+    int patternIndex = *(satBase + 2*i + 1);
+    if (get_bit(vdp->registers[6], 2)) patternIndex += 256;
+
+    if (spriteY >= y && spriteY < y + 8) continue; // skip sprites that are not in scanline
+    modified = true;
+    int lineInSprite = y - spriteY;
+    u8* pixelsLine = (&vdp->vram[32 * i] + 4 * lineInSprite);
+    u8 b1 = pixelsLine[3];
+    u8 b2 = pixelsLine[2];
+    u8 b3 = pixelsLine[1];
+    u8 b4 = pixelsLine[0];
+
+    for (int x = 0; x < 8; x++) {
+      if (sprite_pixels[spriteX + x]) {
+        vdp->statusReg = vdp->statusReg | 16;
+        continue;
+      }
+      int paletteIndex = (get_bit(b1, 7-x) << 3) + (get_bit(b2, 7-x) << 2) + (get_bit(b3, 7-x) << 1) + get_bit(b4, 7-x);
+      u16 clr = get_color(paletteIndex, true);
+
+      sprite_pixels[spriteX + x] = 1;
+      lineBuffer[spriteX + x] = clr;
+    }
+
+  }
+  if (modified) eadk_display_push_rect((eadk_rect_t){0, y, VDP_WIDTH, 1}, lineBuffer);
 }
 
-u8 get_vreset();
-u8 get_vresetdest();
+u8 get_vreset() { return 218; };
+u8 get_vresetdest() { return 212; };
 bool needsReset = true;
+
 void vdp_update(float vdpcycles) {
   u16 hcount = vdp->hcounter;
   int cycles = (int)vdpcycles;
@@ -81,26 +142,38 @@ void vdp_update(float vdpcycles) {
   vdp->hcounter = (hcount + hinc) % 685;
 
   if (nextLine) {
-    u8 vcount = vdp->vcounter;
-    vdp->vcounter++;
-    // start new frame
-    if (vcount == 255) {
+    u16 realVcounter = vdp->realVcounter;
+    if (realVcounter < VDP_HEIGHT) render_frame();
+    
+    else if (realVcounter >= VDP_HEIGHT) {
+      vdp->vscroll = vdp->registers[9];
+    }
+
+    if (realVcounter <= VDP_HEIGHT) {
+      if (vdp->lineInterrupt-- == 256) {
+        vdp->lineInterrupt = vdp->registers[10];
+        if (get_bit(vdp->registers[0], 4)) {
+          vdp->requestInterrupt = true;
+        }
+      }
+    }
+    else vdp->lineInterrupt = vdp->registers[10];
+
+    if (realVcounter == VDP_HEIGHT) {
+      vdp->statusReg = vdp->statusReg | 0x80;
+    }
+
+    if (vdp->realVcounter == get_vreset()) vdp->vcounter = get_vresetdest();
+
+    if (vdp->realVcounter == 261) {
       vdp->vcounter = 0;
-      needsReset = true;
-      render_frame();
+      vdp->realVcounter = 0;
     }
-
-    // handle vcounter jumping
-    else if (vcount == get_vreset() && needsReset) {
-      vcount = get_vresetdest();
-      needsReset = false;
-    } 
-
-    else if (vcount == vdp->height) {
-
+    else {
+      vdp->vcounter++;
+      vdp->realVcounter++;
     }
-
-
-
   }
+  if (get_bit(vdp->statusReg, 7) && get_bit(vdp->registers[1], 5))
+    vdp->requestInterrupt = true;
 }

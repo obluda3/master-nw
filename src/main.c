@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "emu.h"
 #include "cpu.h"
+#include "vdp.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -13,5 +14,6 @@ int main(int argc, char * argv[]) {
   eadk_display_push_rect_uniform((eadk_rect_t){0, 0, 320, 240}, eadk_color_white);
   init_cpu(&emu.cpu);
   init_mem(&emu.mem, eadk_external_data);
+  init_vdp(&emu.vdp);
   emu_loop(&emu);
 }
