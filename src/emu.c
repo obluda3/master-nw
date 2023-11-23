@@ -1,5 +1,6 @@
 #include "emu.h"
 #include "cpu.h"
+#include "time.h"
 #include <stdio.h>
 #include "vdp.h"
 #include <string.h>
@@ -73,6 +74,9 @@ void emu_loop(Emu* emu) {
   while (!quitting) {
     int currentFrameTicks = 0;
     
+    #ifdef TARGET_LINUX
+    BeginDrawing();
+    #endif
     while (currentFrameTicks < ticksPerFrame) {     
       int cpuTicks = execute_cpu(&emu->cpu);
       int machineTicks = cpuTicks * 3;
@@ -80,7 +84,9 @@ void emu_loop(Emu* emu) {
       vdp_update(vdpCycles);
       currentFrameTicks += machineTicks;
     }
-    
+    #ifdef TARGET_LINUX
+    EndDrawing();
+    #endif  
     frame++;
   }
 }

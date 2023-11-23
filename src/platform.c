@@ -32,14 +32,12 @@ void draw_line(int y, u8* pixels) {
     }
     
     #ifdef TARGET_LINUX
-    BeginDrawing();
     for (int x = 0; x < 256; x++) {
         DrawPixel(x*2, y*2, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
         DrawPixel(x*2+1, y*2, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
         DrawPixel(x*2, y*2+1, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
         DrawPixel(x*2+1, y*2+1, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
     }
-    EndDrawing();
     #else
     eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, linebuffer);
     #endif
