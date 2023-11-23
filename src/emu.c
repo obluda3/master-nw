@@ -3,19 +3,22 @@
 #include <stdio.h>
 #include "vdp.h"
 #include <string.h>
+
 /*
 void emu_loop(Emu* emu) {
   bool quitting = false;
   bool slow = true;
   eadk_keyboard_state_t keys;
-  int offs = 0x8000;
+  int offs = 0;
+  
   while (!quitting) { 
+    while (emu->cpu.PC < 0xF0) execute_cpu();
     while (1) {
       keys = eadk_keyboard_scan();
       if (eadk_keyboard_key_down(keys, eadk_key_down)) offs += 8;
-      if (eadk_keyboard_key_down(keys, eadk_key_up) && offs > 16) offs -= 8;
+      if (eadk_keyboard_key_down(keys, eadk_key_up) && offs >= 16) offs -= 8;
       if (eadk_keyboard_key_down(keys, eadk_key_right)) offs += 32;
-      if (eadk_keyboard_key_down(keys, eadk_key_left) && offs > 32) offs -= 32;
+      if (eadk_keyboard_key_down(keys, eadk_key_left) && offs >= 32) offs -= 32;
       if (eadk_keyboard_key_down(keys, eadk_key_ok)) break;
       if (eadk_keyboard_key_down(keys, eadk_key_back)) slow = false;
       if (eadk_keyboard_key_down(keys, eadk_key_var)) slow = true;
@@ -36,14 +39,16 @@ void emu_loop(Emu* emu) {
       char tmp[16];
       for (int i = 0; i < 10; i++) {
         int curOffs = offs + i * 8;
+        u8* buf = &emu->vdp.vram[curOffs];
         sprintf(hexdump, "%04x: ", curOffs);
-        for (int i = 0; i < 8; i++) {
-          sprintf(tmp, "%02x ", read_u8(curOffs+i));
+        for (int j = 0; j < 8; j++) {
+          sprintf(tmp, "%02x ", buf[j]);
           strcat(hexdump, tmp);
         }
+        
         strcat(hexdump, "  ");
-        for (int i = 0; i < 8; i++) {
-          char a = read_u8(curOffs+i);
+        for (int j = 0; j < 8; j++) {
+          char a = buf[j];
           if (a < 0x20) a = '.';
           if (a > 125) a = '.';
           sprintf(tmp, "%c", a);
@@ -53,12 +58,14 @@ void emu_loop(Emu* emu) {
       }
       
     }
-    execute_cpu();
+    int cpuTicks = execute_cpu(&emu->cpu);
+    int machineTicks = cpuTicks * 3;
+    float vdpCycles = machineTicks / 2;
+    vdp_update(vdpCycles);
     if (slow) eadk_timing_msleep(500);
   }
-}*/
-
-
+}
+*/
 void emu_loop(Emu* emu) {
   bool quitting = false;
   int frame = 0;
@@ -66,12 +73,7 @@ void emu_loop(Emu* emu) {
   while (!quitting) {
     int currentFrameTicks = 0;
     
-    u64 time = eadk_timing_millis();
-    eadk_keyboard_state_t keys = eadk_keyboard_scan();
-    set_input(keys);
-    while (currentFrameTicks < ticksPerFrame) {
-      char message[60];
-     
+    while (currentFrameTicks < ticksPerFrame) {     
       int cpuTicks = execute_cpu(&emu->cpu);
       int machineTicks = cpuTicks * 3;
       float vdpCycles = machineTicks / 2;
@@ -79,8 +81,6 @@ void emu_loop(Emu* emu) {
       currentFrameTicks += machineTicks;
     }
     
-    s32 elapsed = (s32)(eadk_timing_millis() - time);
-    while (elapsed < 17) elapsed = eadk_timing_millis() - time;
     frame++;
   }
 }

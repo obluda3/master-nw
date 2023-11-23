@@ -1,81 +1,111 @@
 Q ?= @
-CC = arm-none-eabi-gcc
 BUILD_DIR = output
 NWLINK = npx --yes -- nwlink@0.0.16
-LINK_GC = 1
 LTO = 1
-EADK_FOLDER = lib
-define object_for
-$(addprefix $(BUILD_DIR)/,$(addsuffix .o,$(basename $(1))))
-endef
+LINK_GC = 1
+LIB_FOLDER = /usr/local/include
+LIB_BIN = /usr/local/lib
 
-src = $(addprefix src/,\
-  main.c, \
-	cpu.c, \
-	emu.c, \
-	mem.c, \
-	vdp.c, \
-)
+# Compiler and flags
+CC = arm-none-eabi-gcc
 
-CFLAGS = -std=c99
-CFLAGS += $(shell $(NWLINK) eadk-cflags)
-CFLAGS += -O3 -Wall
-CFLAGS += -ggdb
-CFLAGS += -I$(EADK_FOLDER)
-LDFLAGS = -Wl,--relocatable
-LDFLAGS += -nostartfiles
-LDFLAGS += --specs=nano.specs
-# LDFLAGS += --specs=nosys.specs # Alternatively, use full-fledged newlib
 
+# Determine the target environment (default is NumWorks)
+TARGET_ENV ?= numworks
+
+# Linux-specific flags
+ifeq ($(TARGET_ENV), linux)
+	CC = gcc
+	CFLAGS = -std=c99
+	CFLAGS += -Wall
+	CFLAGS += -ggdb
+	CFLAGS += -I$(LIB_FOLDER)
+	CFLAGS += -DTARGET_LINUX
+	CFLAGS += -Wl,-rpath,$(LIB_BIN)
+	LDFLAGS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -lc
+	
+	BUILD_TARGET = app_linux
+	ICON_TARGET = # No icon target for Linux
+	LTO = 0
+	LINK_GC = 0
+else
+	BUILD_TARGET = app.nwa
+	CFLAGS = -std=c99
+	CFLAGS += $(shell $(NWLINK) eadk-cflags)
+	CFLAGS += -O3 -Wall
+	CFLAGS += -ggdb
+	CFLAGS += -I$(LIB_FOLDER)
+	# Linker flags
+	LDFLAGS = -Wl,--relocatable
+	LDFLAGS += -nostartfiles
+	LDFLAGS += --specs=nano.specs
+	ICON_TARGET = $(BUILD_DIR)/icon.o
+endif
+
+# Garbage collection sections (NumWorks specific)
 ifeq ($(LINK_GC),1)
-CFLAGS += -fdata-sections -ffunction-sections
-LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
-LDFLAGS += -Wl,--gc-sections
+	CFLAGS += -fdata-sections -ffunction-sections
+	LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
+	LDFLAGS += -Wl,--gc-sections
 endif
 
+# Link-time optimization (NumWorks specific)
 ifeq ($(LTO),1)
-CFLAGS += -flto -fno-fat-lto-objects
-CFLAGS += -fwhole-program
-CFLAGS += -fvisibility=internal
-LDFLAGS += -flinker-output=nolto-rel
+	CFLAGS += -flto -fno-fat-lto-objects
+	CFLAGS += -fwhole-program
+	CFLAGS += -fvisibility=internal
+	LDFLAGS += -flinker-output=nolto-rel
 endif
+# Automatically discover source files
+SRC_DIR = src
+src = $(wildcard $(SRC_DIR)/*.c)
 
-.PHONY: build
-build: $(BUILD_DIR)/app.nwa
+# Object files derived from source files
+OBJ = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(src))
 
-.PHONY: check
+.PHONY: build build_linux check run clean
+
+# Build target
+build: $(BUILD_DIR)/$(BUILD_TARGET) $(ICON_TARGET)
+
+# Check target
 check: $(BUILD_DIR)/app.bin
 
-.PHONY: run
-run: $(BUILD_DIR)/app.nwa src/rom.sms
+# Run target
+run: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
 	@echo "INSTALL $<"
-	$(Q) $(NWLINK) install-nwa --external-data src/rom.sms $<
+	$(Q) $(NWLINK) install-nwa --external-data rom.SMS $<
 
-$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.nwa src/rom.sms
-	@echo "BIN     $@"
-	$(Q) $(NWLINK) nwa-bin --external-data src/rom.sms $< $@
+# Binary target
+$(BUILD_DIR)/%.bin: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
+	@echo "BIN	 $@"
+	$(Q) $(NWLINK) nwa-bin --external-data rom.SMS $< $@
 
-$(BUILD_DIR)/%.elf: $(BUILD_DIR)/%.nwa src/rom.sms
-	@echo "ELF     $@"
-	$(Q) $(NWLINK) nwa-elf --external-data src/rom.sms $< $@
+# ELF target
+$(BUILD_DIR)/%.elf: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
+	@echo "ELF	 $@"
+	$(Q) $(NWLINK) nwa-elf --external-data rom.SMS $< $@
 
-$(BUILD_DIR)/app.nwa: $(call object_for,$(src)) $(BUILD_DIR)/icon.o
-	@echo "LD      $@"
-	$(Q) $(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+# NWA and Linux executable target
+$(BUILD_DIR)/app.nwa $(BUILD_DIR)/app_linux: $(OBJ) $(ICON_TARGET)
+	@echo "LD	  $@"
+	$(Q) $(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(addprefix $(BUILD_DIR)/,%.o): %.c | $(BUILD_DIR)
-	@echo "CC      $^"
-	$(Q) $(CC) $(CFLAGS) -c $^ -o $@
+# Compile C source files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@echo "CC	  $@"
+	$(Q) $(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/icon.o: src/icon.png
-	@echo "ICON    $<"
+# Generate icon.o from icon.png (NumWorks specific)
+$(BUILD_DIR)/icon.o: $(SRC_DIR)/icon.png | $(BUILD_DIR)
+	@echo "ICON	$<"
 	$(Q) $(NWLINK) png-icon-o $< $@
 
-.PRECIOUS: $(BUILD_DIR)
+# Create build directory
 $(BUILD_DIR):
-	$(Q) mkdir -p $@/src
+	$(Q) mkdir -p $@
 
-.PHONY: clean
+# Clean target
 clean:
 	@echo "CLEAN"
 	$(Q) rm -rf $(BUILD_DIR)

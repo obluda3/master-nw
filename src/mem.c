@@ -78,18 +78,19 @@ void write_u16(u16 addr, u16 data) {
 }
 
 u8 read_io(u16 addr) {
-  switch (addr) {/*
+  switch (addr) {
     case 0xDC: case 0xC0:
       return current_keys;
     case 0xBE:
       return get_dataport();
     case 0xBF:
-      return get_statusregister();*/
+      return get_statusregister();
     default: 
       return 0;
   }
 }
 
+#ifndef TARGET_LINUX
 void set_input(eadk_keyboard_state_t keyboardState) {
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
@@ -98,8 +99,10 @@ void set_input(eadk_keyboard_state_t keyboardState) {
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
 }
+#endif
 
-void write_io(u16 addr, u8 value) {/*
+void write_io(u16 addr, u8 value) {
+  u8 ditto = value;
   switch (addr) {
     case 0xBE:
       process_datawrite(value);
@@ -107,5 +110,5 @@ void write_io(u16 addr, u8 value) {/*
     case 0xBF:
       process_controlwrite(value);
       break;
-  }*/
+  }
 }

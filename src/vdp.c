@@ -1,10 +1,16 @@
+// CHECK LA LECTURE DE CHAQUE SPRITE 
+// VERIFIER QUON A LES BONS PATTERNS ET COULEURS
+// IL FAUDRAIT POUVOIR AFFICHER LE VDP SEULEMENT A PARTIR DU MOMENT OU ON A FINI LE PROGRAMME
+
 #include "vdp.h"
+#include "platform.h"
 #include <stdio.h>
 #include <eadk.h>
 #include <string.h>
 #include <math.h>
 #define VDP_WIDTH 256
 #define VDP_HEIGHT 192
+#define INLINED __attribute__((always_inline)) inline
 
 VDP* vdp;
 bool waitingForWrite = false;
@@ -12,12 +18,28 @@ bool writeCram = false;
 u16 fullCommand = 0;
 u8 readBuffer = 0;
 
-bool inline get_bit(u8 data, int bitnum) { return (data >> bitnum) & 1; }
-u16 inline address_register() { return fullCommand & 0x3FFF; }
+INLINED bool get_bit(u8 data, int bitnum) { return (data >> bitnum) & 1; }
 
-void inline increment() { 
+u16 address_register() { return fullCommand & 0x3FFF; }
+INLINED void increment() { 
   if (fullCommand == 0x3FFF) fullCommand &= 0xC000;
   else fullCommand++;
+}
+
+u8 get_statusregister() { 
+  u8 result = vdp->statusReg;
+  vdp->statusReg &= 0x1F;
+  waitingForWrite = false;
+  vdp->requestInterrupt = false;
+  return result; 
+}
+
+u8 get_dataport() { 
+  u8 result = readBuffer;
+  waitingForWrite = false;
+  readBuffer = vdp->vram[address_register()];
+  increment();
+  return result;
 }
 
 void init_vdp(VDP* _vdp) {
@@ -25,15 +47,15 @@ void init_vdp(VDP* _vdp) {
   memset(vdp, 0, sizeof(*vdp));
 }
 
-void process_commandwrite(u8 byte) {
-  if (!waitingForWrite) {   
+void process_controlwrite(u8 byte) {
+  if (!waitingForWrite) { 
     fullCommand &= 0xFF00;
     fullCommand |= byte;
     waitingForWrite = true;
   }
   else {
     fullCommand &= 0xFF;
-    fullCommand |= byte << 8;
+    fullCommand |= (byte << 8);
     u8 controlCode = fullCommand >> 14;
     switch (controlCode) {
       case 0:
@@ -53,6 +75,7 @@ void process_commandwrite(u8 byte) {
       case 3:
         writeCram = true;
     }
+    waitingForWrite = false;
   }
 }
 
@@ -70,44 +93,39 @@ u16 get_sprite_address_table() {
 }
 
 u16 get_color(int index, bool sprite) {
-  u8 clr = vdp->cram[16*sprite+index];
-
-  // convert to rgb565
-  u8 r = clr & 0x3;
-  u8 g = clr & 0xC;
-  u8 b = clr & 0x30;
-  u8 _r = (r * 31 / 3) & 0x1F;
-  u8 _g = (g * 63 / 3) & 0x3F;
-  u8 _b = (b * 31 / 3) & 0x1F;
-  return (_r << 11) | (_g << 5) | _b; 
+  u8 clr;
+  return vdp->cram[16*sprite+index];
 }
 
 
 void render_frame() {
-  if (get_bit(vdp->registers[1], 6))
+  if (!get_bit(vdp->registers[1], 6)) {
     return;
+  }
   bool sprite_pixels[VDP_WIDTH] = {0};
-  u16 lineBuffer[VDP_WIDTH] = {0};
+  u8 lineBuffer[VDP_WIDTH] = {0};
 
   // render background
   
   bool modified = false;
   // render sprites
-  u8* satBase = &vdp->vram[get_sprite_address_table() + 128];
+  u8* satBase = &vdp->vram[get_sprite_address_table()]; 
   int y = vdp->realVcounter;
   for (int i = 0; i < 64; i++) {
-    s8 spriteY = vdp->vram[i] + 1;
-    s16 spriteX = *(satBase + 2*i);
+    s8 spriteY = satBase[i] + 1;
+    if (spriteY == -47) break;
+    s16 spriteX = *(satBase + 128 + 2*i);
     if (get_bit(vdp->registers[0], 3))
       spriteX -= 8;
 
-    int patternIndex = *(satBase + 2*i + 1);
+    int patternIndex = *(satBase + 128 + 2*i + 1);
     if (get_bit(vdp->registers[6], 2)) patternIndex += 256;
 
-    if (spriteY >= y && spriteY < y + 8) continue; // skip sprites that are not in scanline
+    if (!(y >= spriteY && y < spriteY + 8)) continue; // skip sprites that are not in scanline
+
     modified = true;
     int lineInSprite = y - spriteY;
-    u8* pixelsLine = (&vdp->vram[32 * i] + 4 * lineInSprite);
+    u8* pixelsLine = (&vdp->vram[32 * patternIndex] + 4 * lineInSprite);
     u8 b1 = pixelsLine[3];
     u8 b2 = pixelsLine[2];
     u8 b3 = pixelsLine[1];
@@ -119,14 +137,14 @@ void render_frame() {
         continue;
       }
       int paletteIndex = (get_bit(b1, 7-x) << 3) + (get_bit(b2, 7-x) << 2) + (get_bit(b3, 7-x) << 1) + get_bit(b4, 7-x);
-      u16 clr = get_color(paletteIndex, true);
+      u8 clr = get_color(paletteIndex, true);
 
       sprite_pixels[spriteX + x] = 1;
       lineBuffer[spriteX + x] = clr;
     }
 
   }
-  if (modified) eadk_display_push_rect((eadk_rect_t){0, y, VDP_WIDTH, 1}, lineBuffer);
+  draw_line(y, lineBuffer);
 }
 
 u8 get_vreset() { return 218; };

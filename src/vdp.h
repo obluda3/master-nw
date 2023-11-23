@@ -20,3 +20,5 @@ void process_controlwrite(u8 byte);
 u8 get_statusregister();
 u8 get_dataport();
 void vdp_update(float vdpcycles);
+u16 address_register2();
+bool writeram();
