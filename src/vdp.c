@@ -93,27 +93,54 @@ u16 get_sprite_address_table() {
 }
 
 u16 get_color(int index, bool sprite) {
-  u8 clr;
   return vdp->cram[16*sprite+index];
 }
 
+u16 get_name_table() {
+  return (vdp->registers[2] & 0xE) << 10;
+}
 
 void render_frame() {
   if (!get_bit(vdp->registers[1], 6)) {
     return;
   }
-  bool sprite_pixels[VDP_WIDTH] = {0};
+  int y = vdp->realVcounter;
+  u8 lineState[VDP_WIDTH] = {0};
   u8 lineBuffer[VDP_WIDTH] = {0};
 
   // render background
+  u16 addr = get_name_table();
+  u16* nameTable = (u16*)&vdp->vram[addr];
+  int line = y / 8;
+  int yInLine = y - line*8;
+  for (int col = 0; col < 32; col++) {
+    u16 tileInfo = nameTable[col + line*32];
+    u16 patternIndex = tileInfo & 0x1FF;
+    bool priorityFlag = (tileInfo & 0x1000) != 0;
+    bool paletteSelect = (tileInfo & 0x800) != 0;
+    bool verticalFlip = (tileInfo & 0x400) != 0;
+    bool horizontalFlip = (tileInfo & 0x200) != 0;
+
+    u8* pixelsLine = (&vdp->vram[32 * patternIndex] + 4 * yInLine);
+    u8 b1 = pixelsLine[3];
+    u8 b2 = pixelsLine[2];
+    u8 b3 = pixelsLine[1];
+    u8 b4 = pixelsLine[0];
+
+    for (int x = 0; x < 8; x++) {
+      int paletteIndex = (get_bit(b1, 7-x) << 3) + (get_bit(b2, 7-x) << 2) + (get_bit(b3, 7-x) << 1) + get_bit(b4, 7-x);
+      u8 clr = get_color(paletteIndex, paletteSelect);
+
+      lineState[col*8 + x] = priorityFlag*2;
+      lineBuffer[col*8 + x] = clr;
+    }
+  }
   
-  bool modified = false;
+  
   // render sprites
   u8* satBase = &vdp->vram[get_sprite_address_table()]; 
-  int y = vdp->realVcounter;
   for (int i = 0; i < 64; i++) {
-    s8 spriteY = satBase[i] + 1;
-    if (spriteY == -47) break;
+    u8 spriteY = satBase[i] + 1;
     s16 spriteX = *(satBase + 128 + 2*i);
     if (get_bit(vdp->registers[0], 3))
       spriteX -= 8;
@@ -123,7 +150,6 @@ void render_frame() {
 
     if (!(y >= spriteY && y < spriteY + 8)) continue; // skip sprites that are not in scanline
 
-    modified = true;
     int lineInSprite = y - spriteY;
     u8* pixelsLine = (&vdp->vram[32 * patternIndex] + 4 * lineInSprite);
     u8 b1 = pixelsLine[3];
@@ -132,14 +158,15 @@ void render_frame() {
     u8 b4 = pixelsLine[0];
 
     for (int x = 0; x < 8; x++) {
-      if (sprite_pixels[spriteX + x]) {
+      if (lineState[spriteX + x] == 1) {
         vdp->statusReg = vdp->statusReg | 16;
         continue;
       }
+      if (lineState[spriteX + x] == 2) continue;
       int paletteIndex = (get_bit(b1, 7-x) << 3) + (get_bit(b2, 7-x) << 2) + (get_bit(b3, 7-x) << 1) + get_bit(b4, 7-x);
       u8 clr = get_color(paletteIndex, true);
 
-      sprite_pixels[spriteX + x] = 1;
+      lineState[spriteX + x] = 1;
       lineBuffer[spriteX + x] = clr;
     }
 

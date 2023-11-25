@@ -102,7 +102,6 @@ void set_input(eadk_keyboard_state_t keyboardState) {
 #endif
 
 void write_io(u16 addr, u8 value) {
-  u8 ditto = value;
   switch (addr) {
     case 0xBE:
       process_datawrite(value);

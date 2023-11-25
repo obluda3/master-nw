@@ -3,6 +3,7 @@
 #include "time.h"
 #include <stdio.h>
 #include "vdp.h"
+#include "platform.h"
 #include <string.h>
 
 /*

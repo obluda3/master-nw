@@ -18,8 +18,7 @@ int main(int argc, char * argv[]) {
   #else
   InitWindow(512, 392, "raylib [core] example - basic window");
   SetTargetFPS(60);
-  BeginDrawing();
-  FILE *file = fopen("/home/houza/Bureau/master-nw/rom.SMS", "rb");
+  FILE *file = fopen(argv[1], "rb");
   fseek(file, 0, SEEK_END);
 	unsigned long len = ftell(file);
 	fseek(file, 0, SEEK_SET);

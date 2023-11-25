@@ -20,9 +20,9 @@ void draw_line(int y, u8* pixels) {
         u8 b = (clr & 0x30) >> 4;
 
         #ifdef TARGET_LINUX
-        linebuffer[x].r = (r * 255 / 3) & 0x1F;
-        linebuffer[x].g = (g * 255 / 3) & 0x1F;
-        linebuffer[x].b = (b * 255 / 3) & 0x1F;
+        linebuffer[x].r = (r * 255 / 3);
+        linebuffer[x].g = (g * 255 / 3);
+        linebuffer[x].b = (b * 255 / 3);
         #else
         u8 _r = (r * 31 / 3) & 0x1F;
         u8 _g = (g * 63 / 3) & 0x3F;
@@ -33,7 +33,7 @@ void draw_line(int y, u8* pixels) {
     
     #ifdef TARGET_LINUX
     for (int x = 0; x < 256; x++) {
-        DrawPixel(x*2, y*2, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
+        DrawPixel(x*2, y*2, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255 });
         DrawPixel(x*2+1, y*2, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
         DrawPixel(x*2, y*2+1, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
         DrawPixel(x*2+1, y*2+1, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
