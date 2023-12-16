@@ -8,8 +8,6 @@
 #include <eadk.h>
 #include <string.h>
 #include <math.h>
-#define VDP_WIDTH 256
-#define VDP_HEIGHT 192
 #define INLINED __attribute__((always_inline)) inline
 
 VDP* vdp;

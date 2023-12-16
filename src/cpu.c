@@ -886,7 +886,7 @@ int execute_ed() {
   return cycles_ed[inst];
 }
 
-int execute_cpu() {
+int execute_cpu(bool* halted) {
   u8 inst = read_u8(cpu->PC++);
 
   switch (inst) {
@@ -1110,7 +1110,7 @@ int execute_cpu() {
       JR_cond(cpu->main.singles.F.c);
       break;
     case 0x39:  // add hl, sp
-      ADD_R16_R16(&cpu->main.pairs.HL, &cpu->main.pairs.HL);
+      ADD_R16_R16(&cpu->main.pairs.HL, &cpu->SP);
       break;
     case 0x3A:  // ld a, (nn)
       LD_R8_NN(&cpu->main.singles.A);
@@ -1293,6 +1293,10 @@ int execute_cpu() {
       break;
     case 0x75:  // ld (hl), L
       LD_R16_R8(cpu->main.pairs.HL, cpu->main.singles.L);
+      break;
+    case 0x76: // halt
+      cpu->PC -= 1;
+      *halted = true;
       break;
     case 0x77:  // ld (hl), A
       LD_R16_R8(cpu->main.pairs.HL, cpu->main.singles.A);
