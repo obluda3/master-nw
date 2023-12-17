@@ -423,11 +423,13 @@ INLINED void CALL_cond(bool condition) {
 }
 
 INLINED void EI() {
+  printf("enabled interrupts \n");
   cpu->FF1 = true;
   cpu->FF2 = true;
 }
 
 INLINED void DI() {
+  printf("disabled interrupts \n");
   cpu->FF1 = false;
   cpu->FF2 = false;
 }

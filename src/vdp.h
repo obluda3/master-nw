@@ -9,8 +9,9 @@ typedef struct {
   u16 hcounter;
   u8 registers[11];
   u8 statusReg;
-  bool requestInterrupt;
-  u8 lineInterrupt;
+  u8 lineCounter;
+  bool frameInterrupt;
+  bool lineInterrupt;
   u8 vscroll;
 } VDP;
 
@@ -18,6 +19,7 @@ void init_vdp(VDP* _vdp);
 void process_datawrite(u8 byte);
 void process_controlwrite(u8 byte);
 u8 get_statusregister();
+bool vdp_is_interrupt();
 u8 get_dataport();
 void vdp_update(float vdpcycles);
 u16 address_register2();

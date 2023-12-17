@@ -17,10 +17,9 @@ void handle_interrupts(Emu* emu, bool reset) {
     if (halted) pc += 1;
     write_u16(emu->cpu.SP, pc);
     emu->cpu.PC = 0x66;
-
     halted = false;
   }
-  else if (emu->cpu.FF1 && emu->vdp.requestInterrupt) {
+  else if (emu->cpu.FF1 && vdp_is_interrupt()) {
     emu->cpu.SP -= 2;
     u16 pc = emu->cpu.PC;
     if (halted) pc += 1;
@@ -174,7 +173,7 @@ void emu_loop(Emu* emu) {
       int machineTicks = cpuTicks * 3;
       float vdpCycles = machineTicks / 2;
       vdp_update(vdpCycles);
-      handle_interrupts(&emu, false);
+      handle_interrupts(emu, false);
       currentFrameTicks += machineTicks;
     }
     #ifdef TARGET_LINUX

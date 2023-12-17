@@ -28,7 +28,8 @@ u8 get_statusregister() {
   u8 result = vdp->statusReg;
   vdp->statusReg &= 0x1F;
   waitingForWrite = false;
-  vdp->requestInterrupt = false;
+  vdp->frameInterrupt = false;
+  vdp->lineInterrupt = false;
   return result; 
 }
 
@@ -68,7 +69,8 @@ void process_controlwrite(u8 byte) {
         u8 data = fullCommand & 0xFF;
         u8 reg = (fullCommand >> 8) & 0xF;
         vdp->registers[reg] = data;
-        if (reg == 1 && get_bit(vdp->registers[1], 5) && get_bit(vdp->statusReg, 7)) vdp->requestInterrupt = true;
+        if (reg == 1 && !get_bit(vdp->registers[1], 5)) 
+          vdp->lineInterrupt = false;
         break;
       case 3:
         writeCram = true;
@@ -98,13 +100,18 @@ u16 get_name_table() {
   return (vdp->registers[2] & 0xE) << 10;
 }
 
+bool vdp_is_interrupt() {
+  printf("lineInterrupt:%d frameInterrupt:%d\n%d  %d", vdp->lineInterrupt, get_bit(vdp->registers[1], 5), vdp->frameInterrupt, get_bit(vdp->registers[0], 4));
+  return (vdp->lineInterrupt && get_bit(vdp->registers[1], 5)) || (vdp->frameInterrupt && get_bit(vdp->registers[0], 4));
+}
+
 void render_frame() {
   if (!get_bit(vdp->registers[1], 6)) {
     return;
   }
   int y = vdp->realVcounter;
-  u8 lineState[VDP_WIDTH] = {0};
-  u8 lineBuffer[VDP_WIDTH] = {0};
+  u8 lineState[256] = {0};
+  u8 lineBuffer[256] = {0};
 
   // render background
   u16 addr = get_name_table();
@@ -138,6 +145,7 @@ void render_frame() {
   // render sprites
   u8* satBase = &vdp->vram[get_sprite_address_table()]; 
   for (int i = 0; i < 64; i++) {
+    if (satBase[i] == 0xD0) break;
     u8 spriteY = satBase[i] + 1;
     s16 spriteX = *(satBase + 128 + 2*i);
     if (get_bit(vdp->registers[0], 3))
@@ -186,27 +194,28 @@ void vdp_update(float vdpcycles) {
 
   if (nextLine) {
     u16 realVcounter = vdp->realVcounter;
-    if (realVcounter < VDP_HEIGHT) render_frame();
-    
-    else if (realVcounter >= VDP_HEIGHT) {
+
+    if (realVcounter < 192) {
+      render_frame(); // active display
+    } else {
       vdp->vscroll = vdp->registers[9];
     }
 
-    if (realVcounter <= VDP_HEIGHT) {
-      if (vdp->lineInterrupt-- == 256) {
-        vdp->lineInterrupt = vdp->registers[10];
-        if (get_bit(vdp->registers[0], 4)) {
-          vdp->requestInterrupt = true;
-        }
+    if (realVcounter <= 192) {
+      vdp->lineCounter--;
+      if (vdp->lineCounter == 255) {
+        vdp->lineCounter = vdp->registers[10];
+        vdp->lineInterrupt = true;
       }
     }
-    else vdp->lineInterrupt = vdp->registers[10];
+    else vdp->lineCounter = vdp->registers[10];
 
-    if (realVcounter == VDP_HEIGHT) {
+    if (realVcounter == 192) {
       vdp->statusReg = vdp->statusReg | 0x80;
+      vdp->frameInterrupt = true;
     }
 
-    if (vdp->realVcounter == get_vreset()) vdp->vcounter = get_vresetdest();
+    if (vdp->realVcounter == 218) vdp->vcounter = 212;
 
     if (vdp->realVcounter == 261) {
       vdp->vcounter = 0;
@@ -217,6 +226,4 @@ void vdp_update(float vdpcycles) {
       vdp->realVcounter++;
     }
   }
-  if (get_bit(vdp->statusReg, 7) && get_bit(vdp->registers[1], 5))
-    vdp->requestInterrupt = true;
 }
