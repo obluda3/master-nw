@@ -101,7 +101,6 @@ u16 get_name_table() {
 }
 
 bool vdp_is_interrupt() {
-  printf("lineInterrupt:%d frameInterrupt:%d\n%d  %d", vdp->lineInterrupt, get_bit(vdp->registers[1], 5), vdp->frameInterrupt, get_bit(vdp->registers[0], 4));
   return (vdp->lineInterrupt && get_bit(vdp->registers[1], 5)) || (vdp->frameInterrupt && get_bit(vdp->registers[0], 4));
 }
 
