@@ -39,6 +39,6 @@ void draw_line(int y, u8* pixels) {
         DrawPixel(x*2+1, y*2+1, (Color){ linebuffer[x].r, linebuffer[x].g, linebuffer[x].b, 255});
     }
     #else
-    eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, linebuffer);
+    //eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, linebuffer);
     #endif
 }

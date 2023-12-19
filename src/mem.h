@@ -14,4 +14,5 @@ u16 read_u16(u16 addr);
 u8 read_io(u16 addr);
 //void set_input(eadk_keyboard_state_t keyboardState);
 void write_io(u16 addr, u8 value);
+void set_input(u8 val);
 void init_mem(Memory* memory, const char* cartridge);

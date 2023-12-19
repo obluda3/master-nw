@@ -28,6 +28,16 @@ void handle_interrupts(Emu* emu, bool reset) {
     halted = false;
   }
 }
+
+int step(Emu* emu) {
+  int cpuTicks = execute_cpu(&halted);
+  int machineTicks = cpuTicks * 3;
+  float vdpCycles = machineTicks / 2;
+  handle_interrupts(emu, false);
+  vdp_update(vdpCycles);
+  return machineTicks;
+}
+
 #ifdef DEBUG
 
 int get_breakpoint() {
@@ -99,7 +109,7 @@ void emu_loop(Emu* emu) {
       if (eadk_keyboard_key_down(keys, eadk_key_exp)) {
         int addr = get_breakpoint();
         if (addr != -1) {
-          while (emu->cpu.PC != addr) execute_cpu(&halted);
+          while (emu->cpu.PC != addr) step(emu);
         }
         eadk_timing_millis(500);
         continue;
@@ -139,15 +149,32 @@ void emu_loop(Emu* emu) {
       }
       
     }
-    int cpuTicks = execute_cpu(&halted);
-    int machineTicks = cpuTicks * 3;
-    float vdpCycles = machineTicks / 2;
-    vdp_update(vdpCycles);
-    handle_interrupts(emu, false);
+    step(emu);
     eadk_timing_msleep(500);
   }
 }
 #else 
+
+u8 get_input() {
+  u8 current_keys = 0;
+  #ifndef TARGET_LINUX
+  eadk_keyboard_state_t keyboardState = eadk_keyboard_scan();
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
+  #else
+  current_keys |= !IsKeyDown(KEY_UP);
+  current_keys |= !IsKeyDown(KEY_DOWN) << 1;
+  current_keys |= !IsKeyDown(KEY_LEFT) << 2;
+  current_keys |= !IsKeyDown(KEY_RIGHT) << 3;
+  current_keys |= !IsKeyDown(KEY_W) << 4;
+  current_keys |= !IsKeyDown(KEY_X) << 5;
+  #endif
+  return current_keys;
+}
 
 void emu_loop(Emu* emu) {
   bool quitting = false;
@@ -158,26 +185,21 @@ void emu_loop(Emu* emu) {
     bool halted = false;
     
     #ifdef TARGET_LINUX
+    //set_input(get_input());
     BeginDrawing();
     #endif
     while (currentFrameTicks < ticksPerFrame) {    
-      Registers *main = &emu->cpu.main;
-      Registers *alt = &emu->cpu.alt;
       /*printf("PC=%04x\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
                   main->singles.B, main->singles.C, alt->singles.B, alt->singles.C, 
                   main->singles.D, main->singles.E, alt->singles.D, alt->singles.E, 
                   main->singles.H, main->singles.L, alt->singles.H, alt->singles.L, 
                   emu->cpu.IX, emu->cpu.IY, emu->cpu.SP, emu->cpu.I, emu->cpu.R );
       getchar();*/
-      int cpuTicks = execute_cpu(&halted);
-      int machineTicks = cpuTicks * 3;
-      float vdpCycles = machineTicks / 2;
-      vdp_update(vdpCycles);
-      handle_interrupts(emu, false);
-      currentFrameTicks += machineTicks;
+      currentFrameTicks += step(emu);
     }
     #ifdef TARGET_LINUX
     EndDrawing();
+    quitting = WindowShouldClose();
     #endif  
     frame++;
   }

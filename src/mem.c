@@ -90,16 +90,7 @@ u8 read_io(u16 addr) {
   }
 }
 
-#ifndef TARGET_LINUX
-void set_input(eadk_keyboard_state_t keyboardState) {
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
-}
-#endif
+void set_input(u8 val) { current_keys = val; }
 
 void write_io(u16 addr, u8 value) {
   switch (addr) {

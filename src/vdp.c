@@ -1,7 +1,3 @@
-// CHECK LA LECTURE DE CHAQUE SPRITE 
-// VERIFIER QUON A LES BONS PATTERNS ET COULEURS
-// IL FAUDRAIT POUVOIR AFFICHER LE VDP SEULEMENT A PARTIR DU MOMENT OU ON A FINI LE PROGRAMME
-
 #include "vdp.h"
 #include "platform.h"
 #include <stdio.h>
@@ -69,8 +65,7 @@ void process_controlwrite(u8 byte) {
         u8 data = fullCommand & 0xFF;
         u8 reg = (fullCommand >> 8) & 0xF;
         vdp->registers[reg] = data;
-        if (reg == 1 && !get_bit(vdp->registers[1], 5)) 
-          vdp->lineInterrupt = false;
+
         break;
       case 3:
         writeCram = true;
@@ -101,7 +96,9 @@ u16 get_name_table() {
 }
 
 bool vdp_is_interrupt() {
-  return (vdp->lineInterrupt && get_bit(vdp->registers[1], 5)) || (vdp->frameInterrupt && get_bit(vdp->registers[0], 4));
+  bool a = vdp->lineInterrupt && get_bit(vdp->registers[0], 4);
+  bool b = vdp->frameInterrupt && get_bit(vdp->registers[1], 5);
+  return a || b;
 }
 
 void render_frame() {

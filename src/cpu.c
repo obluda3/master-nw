@@ -1678,7 +1678,7 @@ int execute_cpu(bool* halted) {
     case 0xF0:  // ret p
       RET_cond(!cpu->main.singles.F.n);
       break;
-    case 0xF1:  // pop hl
+    case 0xF1:  // pop af
       cpu->main.pairs.AF = POP();
       break;
     case 0xF2:  // jp p, nn
@@ -1865,7 +1865,7 @@ INLINED void SRL_R16(u16 addr) {
 }
 
 INLINED void BIT(u8 val, int bitNum) {
-  u8 bit = val >> bitNum;
+  u8 bit = (val >> bitNum) & 1;
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.h = 1;
   cpu->main.singles.F.z = bit == 0;
