@@ -159,12 +159,12 @@ u8 get_input() {
   u8 current_keys = 0;
   #ifndef TARGET_LINUX
   eadk_keyboard_state_t keyboardState = eadk_keyboard_scan();
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
-  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_up);
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
+  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
   #else
   current_keys |= !IsKeyDown(KEY_UP);
   current_keys |= !IsKeyDown(KEY_DOWN) << 1;
