@@ -16,7 +16,7 @@ int main(int argc, char * argv[]) {
   rom = eadk_external_data;
   eadk_display_push_rect_uniform((eadk_rect_t){0, 0, 320, 240}, eadk_color_white);
   #else
-  InitWindow(512, 392, "raylib [core] example - basic window");
+  InitWindow(512, 384, "master-nw");
   SetTargetFPS(60);
   FILE *file = fopen(argv[1], "rb");
   fseek(file, 0, SEEK_END);
