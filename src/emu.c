@@ -182,12 +182,8 @@ void emu_loop(Emu* emu) {
   const float ticksPerFrame = 10738580 / 60;
   while (!quitting) {
     int currentFrameTicks = 0;
-    bool halted = false;
     
-    #ifdef TARGET_LINUX
-    //set_input(get_input());
-    BeginDrawing();
-    #endif
+    set_input(get_input());
     while (currentFrameTicks < ticksPerFrame) {    
       /*printf("PC=%04x\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
                   main->singles.B, main->singles.C, alt->singles.B, alt->singles.C, 
@@ -198,8 +194,9 @@ void emu_loop(Emu* emu) {
       currentFrameTicks += step(emu);
     }
     #ifdef TARGET_LINUX
-    EndDrawing();
     quitting = WindowShouldClose();
+    #else
+    quitting = eadk_keyboard_key_down(eadk_keyboard_scan(), eadk_key_back);
     #endif  
     frame++;
   }

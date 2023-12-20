@@ -41,6 +41,59 @@ void init_vdp(VDP* _vdp) {
   vdp = _vdp;
   memset(vdp, 0, sizeof(*vdp));
 }
+#ifdef TARGET_LINUX
+typedef Color color;
+color framebuffer[256*192];
+color conversion_table[] = { { 0, 0, 0, 255 }, { 85, 0, 0, 255 }, { 170, 0, 0, 255 }, { 255, 0, 0, 255 }, { 0, 85, 0, 255 }, { 85, 85, 0, 255 }, { 170, 85, 0, 255 }, { 255, 85, 0, 255 }, 
+{ 0, 170, 0, 255 }, { 85, 170, 0, 255 }, { 170, 170, 0, 255 }, { 255, 170, 0, 255 }, { 0, 255, 0, 255 }, { 85, 255, 0, 255 }, { 170, 255, 0, 255 }, { 255, 255, 0, 255 }, 
+{ 0, 0, 85, 255 }, { 85, 0, 85, 255 }, { 170, 0, 85, 255 }, { 255, 0, 85, 255 }, { 0, 85, 85, 255 }, { 85, 85, 85, 255 }, { 170, 85, 85, 255 }, { 255, 85, 85, 255 }, 
+{ 0, 170, 85, 255 }, { 85, 170, 85, 255 }, { 170, 170, 85, 255 }, { 255, 170, 85, 255 }, { 0, 255, 85, 255 }, { 85, 255, 85, 255 }, { 170, 255, 85, 255 }, { 255, 255, 85, 255 }, 
+{ 0, 0, 170, 255 }, { 85, 0, 170, 255 }, { 170, 0, 170, 255 }, { 255, 0, 170, 255 }, { 0, 85, 170, 255 }, { 85, 85, 170, 255 }, { 170, 85, 170, 255 }, { 255, 85, 170, 255 }, 
+{ 0, 170, 170, 255 }, { 85, 170, 170, 255 }, { 170, 170, 170, 255 }, { 255, 170, 170, 255 }, { 0, 255, 170, 255 }, { 85, 255, 170, 255 }, { 170, 255, 170, 255 }, { 255, 255, 170, 255 }, 
+{ 0, 0, 255, 255 }, { 85, 0, 255, 255 }, { 170, 0, 255, 255 }, { 255, 0, 255, 255 }, { 0, 85, 255, 255 }, { 85, 85, 255, 255 }, { 170, 85, 255, 255 }, { 255, 85, 255, 255 }, 
+{ 0, 170, 255, 255 }, { 85, 170, 255, 255 }, { 170, 170, 255, 255 }, { 255, 170, 255, 255 }, { 0, 255, 255, 255 }, { 85, 255, 255, 255 }, { 170, 255, 255, 255 }, { 255, 255, 255, 255 },  };
+
+#else
+typedef eadk_color_t color;
+color conversion_table[64] =  { 0x0000, 0x5000, 0xa000, 0xf800, 0x02a0, 0x52a0, 0xa2a0, 0xfaa0, 
+                                0x0540, 0x5540, 0xa540, 0xfd40, 0x07e0, 0x57e0, 0xa7e0, 0xffe0, 
+                                0x000a, 0x500a, 0xa00a, 0xf80a, 0x02aa, 0x52aa, 0xa2aa, 0xfaaa, 
+                                0x054a, 0x554a, 0xa54a, 0xfd4a, 0x07ea, 0x57ea, 0xa7ea, 0xffea, 
+                                0x0014, 0x5014, 0xa014, 0xf814, 0x02b4, 0x52b4, 0xa2b4, 0xfab4, 
+                                0x0554, 0x5554, 0xa554, 0xfd54, 0x07f4, 0x57f4, 0xa7f4, 0xfff4, 
+                                0x001f, 0x501f, 0xa01f, 0xf81f, 0x02bf, 0x52bf, 0xa2bf, 0xfabf, 
+                                0x055f, 0x555f, 0xa55f, 0xfd5f, 0x07ff, 0x57ff, 0xa7ff, 0xffff, };
+#endif
+
+
+void draw_line(u8 y, u8* line) {
+  color lineBuffer[256];
+  for (int x = 0; x < 256; x++) {
+      u8 clr = line[x];
+      lineBuffer[x] = conversion_table[clr];
+  }
+
+  #ifdef TARGET_LINUX
+  memcpy(framebuffer + y*256, lineBuffer, sizeof(lineBuffer));
+  if (y == 127) {
+    BeginDrawing();
+    for (int y = 0; y < 192; y++) {
+      for (int x = 0; x < 256; x++) {
+        color px = framebuffer[y*256+x];
+        DrawPixel(x*2, y*2, px);
+        DrawPixel(x*2+1, y*2, px);
+        DrawPixel(x*2, y*2+1, px);
+        DrawPixel(x*2+1, y*2+1, px);
+      }
+    }
+    EndDrawing();
+    memset(framebuffer, sizeof(framebuffer), 0);
+  }
+  #else
+  eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
+  #endif
+}
+
 
 void process_controlwrite(u8 byte) {
   if (!waitingForWrite) { 
@@ -101,7 +154,7 @@ bool vdp_is_interrupt() {
   return a || b;
 }
 
-void render_frame() {
+void process_line() {
   if (!get_bit(vdp->registers[1], 6)) {
     return;
   }
@@ -137,7 +190,6 @@ void render_frame() {
     }
   }
   
-  
   // render sprites
   u8* satBase = &vdp->vram[get_sprite_address_table()]; 
   for (int i = 0; i < 64; i++) {
@@ -171,7 +223,6 @@ void render_frame() {
       lineState[spriteX + x] = 1;
       lineBuffer[spriteX + x] = clr;
     }
-
   }
   draw_line(y, lineBuffer);
 }
@@ -192,7 +243,7 @@ void vdp_update(float vdpcycles) {
     u16 realVcounter = vdp->realVcounter;
 
     if (realVcounter < 192) {
-      render_frame(); // active display
+      process_line();
     } else {
       vdp->vscroll = vdp->registers[9];
     }
