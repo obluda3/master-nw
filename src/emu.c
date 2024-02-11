@@ -6,9 +6,7 @@
 #include "vdp.h"
 #include "platform.h"
 #include <string.h>
-
 bool halted = false;
-
 void handle_interrupts(Emu* emu, bool reset) {
   if (emu->cpu.FF2 && reset) {
     emu->cpu.FF1 = false;
@@ -39,6 +37,28 @@ int step(Emu* emu) {
 }
 
 #ifdef DEBUG
+#include "inst.h"
+char* get_inst(Emu* emu) {
+  char* op;
+  u8 opcode = read_u8(emu->cpu.PC);
+  op = op_names[opcode];
+  if (opcode == 0xCB) op = cb_names[read_u8(emu->cpu.PC+1)];
+  else if (opcode == 0xDD) {
+    u8 op2 = read_u8(emu->cpu.PC+1);
+    if (op2 != 0xCB) op = dd_names[op2];
+    else op = ddcb_names[read_u8(emu->cpu.PC+2)];
+  }
+  else if (opcode == 0xFD) {
+    u8 op2 = read_u8(emu->cpu.PC+1);
+    if (op2 != 0xCB) op = fd_names[op2];
+    else op = fdcb_names[read_u8(emu->cpu.PC+2)];
+  }
+  else if (opcode == 0xED) {
+    u8 op2 = read_u8(emu->cpu.PC+1);
+    op = ed_names[op2];
+  }
+  return op;
+}
 
 int get_breakpoint() {
   char input[64] = {0};
@@ -117,7 +137,7 @@ void emu_loop(Emu* emu) {
       char message[512];
       Registers *main = &emu->cpu.main;
       Registers *alt = &emu->cpu.alt;
-      sprintf(message, "PC=%04x\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
+      sprintf(message, "PC=%04x   %s\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, get_inst(emu), main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
                   main->singles.B, main->singles.C, alt->singles.B, alt->singles.C, 
                   main->singles.D, main->singles.E, alt->singles.D, alt->singles.E, 
                   main->singles.H, main->singles.L, alt->singles.H, alt->singles.L, 
@@ -165,6 +185,7 @@ u8 get_input() {
   current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
   current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
   current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
+  current_keys |= 0b11000000;
   #else
   current_keys |= !IsKeyDown(KEY_UP);
   current_keys |= !IsKeyDown(KEY_DOWN) << 1;
@@ -172,6 +193,7 @@ u8 get_input() {
   current_keys |= !IsKeyDown(KEY_RIGHT) << 3;
   current_keys |= !IsKeyDown(KEY_W) << 4;
   current_keys |= !IsKeyDown(KEY_X) << 5;
+  current_keys |= 0b11000000;
   #endif
   return current_keys;
 }

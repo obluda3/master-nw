@@ -20,7 +20,7 @@ INLINED void increment() {
   else fullCommand++;
 }
 
-u8 get_statusregister() { 
+u8 get_statusreg() { 
   u8 result = vdp->statusReg;
   vdp->statusReg &= 0x1F;
   waitingForWrite = false;
@@ -37,7 +37,15 @@ u8 get_dataport() {
   return result;
 }
 
-void init_vdp(VDP* _vdp) {
+u8 vdp_read_io(u8 port) {
+  if (port == 0xBE) return get_dataport();
+  if (port == 0xBF) return get_statusreg();
+  if (port == 0x7E) return vdp->vcounter;
+  if (port == 0x7F) return vdp->hcounter; 
+  return 0;
+}
+
+void vdp_init(VDP* _vdp) {
   vdp = _vdp;
   memset(vdp, 0, sizeof(*vdp));
 }
@@ -90,12 +98,12 @@ void draw_line(u8 y, u8* line) {
     memset(framebuffer, sizeof(framebuffer), 0);
   }
   #else
-  eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
+  //eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
   #endif
 }
 
 
-void process_controlwrite(u8 byte) {
+void vdp_process_controlwrite(u8 byte) {
   if (!waitingForWrite) { 
     fullCommand &= 0xFF00;
     fullCommand |= byte;
@@ -127,13 +135,18 @@ void process_controlwrite(u8 byte) {
   }
 }
 
-void process_datawrite(u8 byte) {
+void vdp_process_datawrite(u8 byte) {
   readBuffer = byte;
   if (writeCram)
     vdp->cram[address_register() & 0x1F] = byte;
   else
     vdp->vram[address_register()] = byte;
   increment();
+}
+
+void vdp_write_io(u8 port, u8 value) {
+  if (port == 0xBE) vdp_process_datawrite(value);
+  if (port == 0xBF) vdp_process_controlwrite(value);
 }
 
 u16 get_sprite_address_table() {

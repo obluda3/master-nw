@@ -888,6 +888,8 @@ int execute_ed() {
 
 int execute_cpu(bool* halted) {
   u8 inst = read_u8(cpu->PC++);
+  cpu->R++;
+  cpu->R = cpu->R & 0x7F;
 
   switch (inst) {
     case 0x01:  // ld bc, nn

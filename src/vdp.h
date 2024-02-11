@@ -15,12 +15,10 @@ typedef struct {
   u8 vscroll;
 } VDP;
 
-void init_vdp(VDP* _vdp);
-void process_datawrite(u8 byte);
-void process_controlwrite(u8 byte);
-u8 get_statusregister();
+void vdp_init(VDP* _vdp);
+u8 get_statusreg();
 bool vdp_is_interrupt();
+u8 vdp_read_io(u8 port);
+void vdp_write_io(u8 port, u8 value);
 u8 get_dataport();
 void vdp_update(float vdpcycles);
-u16 address_register2();
-bool writeram();
