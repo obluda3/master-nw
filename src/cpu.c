@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include <string.h>
+#include <stdio.h>
 #include "mem.h"
 
 #define INLINED __attribute__((always_inline)) inline
@@ -98,6 +99,10 @@ void init_cpu(Z80* CPU) {
 }
 int opcode_cycles[] = {};
 
+INLINED bool overflow_flag8(u8 reg1, u8 reg2, u8 res) {
+  return ((reg1 & 0x80) == (reg2 & 0x80)) && ((reg1 & 0x80) != (res & 0x80));
+}
+
 INLINED void SBC_R8_R8(u8* reg, u8 reg2) {
   u8 reg1 = *reg;
   u8 c = cpu->main.singles.F.c;
@@ -106,10 +111,12 @@ INLINED void SBC_R8_R8(u8* reg, u8 reg2) {
   *reg = newVal;
   cpu->main.singles.F.c = result < 0;
   cpu->main.singles.F.n = 1;
-  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.pv = overflow_flag8(reg1, ~reg2+1, newVal);
   cpu->main.singles.F.h = ((reg1 & 0xF) - (reg2 & 0xF) - c) < 0xF;
   cpu->main.singles.F.z = newVal == 0;
   cpu->main.singles.F.s = (newVal & 0x80) != 0;
+  cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (newVal & 0x20) >> 5;
 }
 
 INLINED void SBC_R8_N(u8* reg) {
@@ -124,6 +131,8 @@ INLINED void update_flags_bitwise(u8 result) {
   cpu->main.singles.F.h = 1;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = (result & 0x80) != 0;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
 }
 
 INLINED void AND_R8_R8(u8* reg, u8 reg2) {
@@ -159,15 +168,17 @@ INLINED void OR_R8_N(u8* reg) {
   cpu->PC += 1;
 }
 
-u8 _SUB_8(u8 op1, u8 op2) {
+u8 _SUB_8(u8 op1, u16 op2) {
   s16 result = op1 - op2;
   u8 newVal = result & 0xFF;
   cpu->main.singles.F.c = result < 0;
   cpu->main.singles.F.n = 1;
-  cpu->main.singles.F.pv = (op1 & 0x80) == (op2 & 0x80) && (op1 & 0x80) != (newVal & 0x80);
-  cpu->main.singles.F.h = ((op1 & 0xF) - (op2 & 0xF)) < 0xF;
+  cpu->main.singles.F.pv = overflow_flag8(op1, ~op2 + 1, newVal);
+  cpu->main.singles.F.h = (op1 & 0xF) < (op2 & 0xF);
   cpu->main.singles.F.z = newVal == 0;
   cpu->main.singles.F.s = (newVal & 0x80) != 0;
+  cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (newVal & 0x20) >> 5;
   return newVal;
 }
 
@@ -233,9 +244,12 @@ INLINED void ADD_R16_R16(u16* dest, u16* value) {
   u16 val = *value;
   u16 result = dst + val;
   *dest = result;
+  u8 high = (result & 0xFF00) >> 8;
   cpu->main.singles.F.c = (dst + val) > 0xFFFF;
   cpu->main.singles.F.n = 0;
-  cpu->main.singles.F.h = (dst & 0xF) + (val & 0xF) > 0xF;
+  cpu->main.singles.F.b3 = (high & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (high & 0x20) >> 5;
+  cpu->main.singles.F.h = (dst & 0xFFF) + (val & 0xFFF) > 0xFFF;
 }
 
 INLINED void INC_R16(u16* reg) {
@@ -245,11 +259,14 @@ INLINED void INC_R16(u16* reg) {
 INLINED void INC_R16a(u16 addr) {
   u8 value = read_u16(addr);
   u8 result = value + 1;
+
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.pv = value == 0x7F;
   cpu->main.singles.F.h = (value & 0xF) == 0xF;
-  cpu->main.singles.F.z = value == 0xFF;
+  cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   write_u8(addr, result);
 }
 
@@ -261,6 +278,8 @@ INLINED void INC_R8(u8* reg) {
   cpu->main.singles.F.pv = value == 0x7F;
   cpu->main.singles.F.h = (value & 0xF) == 0xF;
   cpu->main.singles.F.z = value == 0xFF;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   cpu->main.singles.F.s = result >> 7;
 }
 
@@ -271,9 +290,11 @@ INLINED void ADD_R8_R8(u8* reg, u8 reg2) {
   *reg = newVal;
   cpu->main.singles.F.c = result > 0xFF;
   cpu->main.singles.F.n = 0;
-  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.pv = overflow_flag8(reg1, reg2, newVal);
   cpu->main.singles.F.h = ((reg1 & 0xF) + (reg2 & 0xF)) > 0xF;
   cpu->main.singles.F.z = newVal == 0;
+  cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (newVal & 0x20) >> 5;
   cpu->main.singles.F.s = (newVal & 0x80) != 0;
 }
 
@@ -290,10 +311,12 @@ INLINED void ADC_R8_R8(u8* reg, u8 reg2) {
   *reg = newVal;
   cpu->main.singles.F.c = result > 0xFF;
   cpu->main.singles.F.n = 0;
-  cpu->main.singles.F.pv = (reg1 & 0x80) == (reg2 & 0x80) && (reg1 & 0x80) != (newVal & 0x80);
+  cpu->main.singles.F.pv = overflow_flag8(reg1, reg2, newVal);
   cpu->main.singles.F.h = ((reg1 & 0xF) + (reg2 & 0xF) + c) > 0xF;
   cpu->main.singles.F.z = newVal == 0;
   cpu->main.singles.F.s = (newVal & 0x80) != 0;
+  cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (newVal & 0x20) >> 5;
 }
 
 INLINED void ADC_R8_N(u8* reg) {
@@ -311,6 +334,8 @@ INLINED void ADC_R16_R16(u16* reg1, u16 reg2) {
   cpu->main.singles.F.h = ((*reg1 & 0xFFF) + (val & 0xFFF)) > 0xFFF;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 15;
+  cpu->main.singles.F.b3 = ((result >> 8) & 0x8) >> 3;
+  cpu->main.singles.F.b5 = ((result >> 8) & 0x20) >> 5;
 
   *reg1 = result;
 }
@@ -344,6 +369,8 @@ INLINED void DEC_R8(u8* reg) {
   cpu->main.singles.F.h = (value & 0xF) == 0x0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
 }
 
 INLINED void DEC_R16a(u16 addr) {
@@ -355,6 +382,8 @@ INLINED void DEC_R16a(u16 addr) {
   cpu->main.singles.F.h = (value & 0xF) == 0x0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
 }
 
 INLINED void DEC_R16(u16* reg) {
@@ -561,6 +590,9 @@ int execute_ddfd(bool dd) {
       break;
     case 0xF9:  // ld sp, ix
       cpu->SP = *reg;
+      break;
+    default:
+      printf("undocumented ddfd inst %02x\n", inst);
       break;
   }
   int result = cycles_ixiy[inst] + bonus_cycles;
@@ -879,7 +911,9 @@ int execute_ed() {
       }
       break;
       
-
+    default:
+      printf("undocumented ed inst %02x\n", inst);
+      break;
 
 
   }
@@ -892,6 +926,8 @@ int execute_cpu(bool* halted) {
   cpu->R = cpu->R & 0x7F;
 
   switch (inst) {
+    case 0x0:
+      break;
     case 0x01:  // ld bc, nn
       LD_R16_NN(&cpu->main.pairs.BC);
       break;
@@ -913,10 +949,13 @@ int execute_cpu(bool* halted) {
     case 0x07: {  // rlca
       u8 a = cpu->main.singles.A;
       u8 c = a >> 7;
-      cpu->main.singles.A = (a << 1) | c;
+      u8 res = (a << 1) | c;
+      cpu->main.singles.A = res;
       cpu->main.singles.F.c = c;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.b3 = (res & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (res & 0x20) >> 5;
       break;
     }
     case 0x08: {  // ex af, af'
@@ -946,10 +985,13 @@ int execute_cpu(bool* halted) {
     case 0x0F: {  // rrca
       u8 a = cpu->main.singles.A;
       u8 c = a & 1;
-      cpu->main.singles.A = a >> 1 | (c << 7);
+      u8 res = a >> 1 | (c << 7);
+      cpu->main.singles.A = res;
       cpu->main.singles.F.c = c;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.b3 = (res & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (res & 0x20) >> 5;
       return 4;
     }
     case 0x10:  // djnz
@@ -977,9 +1019,12 @@ int execute_cpu(bool* halted) {
       u8 a = cpu->main.singles.A;
       u8 c = (a & 0x80) >> 7;
       a = a << 1 | cpu->main.singles.F.c;
+      cpu->main.singles.A = a;
       cpu->main.singles.F.c = c;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.b3 = (a & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (a & 0x20) >> 5;
       return 4;
     }
     case 0x18:  // jr d
@@ -1010,6 +1055,8 @@ int execute_cpu(bool* halted) {
       cpu->main.singles.F.c = c;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.b3 = (cpu->main.singles.A & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (cpu->main.singles.A & 0x20) >> 5;
       return 4;
     }
     case 0x20:  // jr nz, d
@@ -1025,7 +1072,7 @@ int execute_cpu(bool* halted) {
       INC_R16(&cpu->main.pairs.HL);
       break;
     case 0x24:  // inc h
-      INC_R8(&cpu->main.singles.E);
+      INC_R8(&cpu->main.singles.H);
       break;
     case 0x25:  // dec h
       DEC_R8(&cpu->main.singles.H);
@@ -1033,26 +1080,33 @@ int execute_cpu(bool* halted) {
     case 0x26:  // ld h, n
       LD_R8_N(&cpu->main.singles.H);
       break;
-    case 0x27:  // daa
+    case 0x27: { // daa 
+      // https://github.com/mamedev/mame/blob/master/src/devices/cpu/z80/z80.cpp
+      u8 a = cpu->main.singles.A;
       if (cpu->main.singles.F.n) {
-        if (cpu->main.singles.F.c) {
-          cpu->main.singles.A -= 0x60;
-          cpu->main.singles.F.c = 1;
-        } else
-          cpu->main.singles.A -= 0x6;
-      }
-
-      else {
-        if (cpu->main.singles.F.c || cpu->main.singles.A > 0x99) {
-          cpu->main.singles.A += 0x60;
+        if (cpu->main.singles.F.h || ((a & 0xF) > 9))
+          a -= 6;
+        if (cpu->main.singles.F.c || (cpu->main.singles.A > 0x99)) {
+          a -= 0x60; 
           cpu->main.singles.F.c = 1;
         }
-        if (cpu->main.singles.F.h || (cpu->main.singles.A & 0xF) > 0x09) cpu->main.singles.A += 6;
       }
+      else {
+        if (cpu->main.singles.F.h || (a & 0xF) > 0x09) 
+          a += 6;
+        if (cpu->main.singles.F.c || cpu->main.singles.A > 0x99) {
+          a += 0x60;
+          cpu->main.singles.F.c = 1;
+        }
+      }
+      cpu->main.singles.A = a;
       cpu->main.singles.F.pv = parity(cpu->main.singles.A);
       cpu->main.singles.F.z = cpu->main.singles.A == 0;
       cpu->main.singles.F.s = cpu->main.singles.A >> 7;
+      cpu->main.singles.F.b3 = (cpu->main.singles.A & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (cpu->main.singles.A & 0x20) >> 5;
       break;
+    }
     case 0x28:  // jr z, d
       JR_cond(cpu->main.singles.F.z);
       break;
@@ -1077,8 +1131,10 @@ int execute_cpu(bool* halted) {
     case 0x2F: {// cpl
       u8 result = cpu->main.singles.A ^ 0xFF;
       cpu->main.singles.A = result;
-      cpu->main.singles.F.h = result > 0xF;
-      cpu->main.singles.F.z = result == 0;
+      cpu->main.singles.F.h = 1;
+      cpu->main.singles.F.n = 1;
+      cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (result & 0x20) >> 5;
       break;
     }
     case 0x30:  // jr nc, d
@@ -1107,6 +1163,8 @@ int execute_cpu(bool* halted) {
       cpu->main.singles.F.c = 1;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
+      cpu->main.singles.F.b3 = (cpu->main.singles.A & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (cpu->main.singles.A & 0x20) >> 5;
       break;
     case 0x38:  // jr c, d
       JR_cond(cpu->main.singles.F.c);
@@ -1130,9 +1188,11 @@ int execute_cpu(bool* halted) {
       LD_R8_N(&cpu->main.singles.A);
       break;
     case 0x3F:  // ccf
+      cpu->main.singles.F.h = cpu->main.singles.F.c;
       cpu->main.singles.F.c = !cpu->main.singles.F.c;
       cpu->main.singles.F.n = 0;
-      cpu->main.singles.F.h = !cpu->main.singles.F.h;
+      cpu->main.singles.F.b3 = (cpu->main.singles.A & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (cpu->main.singles.A & 0x20) >> 5;
       break;
     case 0x40:  // ld b, b
       LD_R8_R8(&cpu->main.singles.B, cpu->main.singles.B);
@@ -1725,6 +1785,9 @@ int execute_cpu(bool* halted) {
     case 0xFF:  // rst 38h
       RST(0x38);
       break;
+    default:
+      printf("undocumented inst %02x\n", inst);
+      break;
   }
   int result = cycles[inst] + bonus_cycles;
   bonus_cycles = 0;
@@ -1739,6 +1802,8 @@ INLINED u8 _RLC(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1758,6 +1823,8 @@ INLINED u8 _RRC(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1871,6 +1938,8 @@ INLINED void BIT(u8 val, int bitNum) {
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.h = 1;
   cpu->main.singles.F.z = bit == 0;
+  cpu->main.singles.F.b3 = bitNum == 3 ? bit : 0;
+  cpu->main.singles.F.b5 = bitNum == 5 ? bit : 0;
 }
 
 INLINED u8 _RES(u8 val, int bitNum) {
@@ -1962,6 +2031,7 @@ int execute_cb() {
     if (reg) SET_R8(reg, bitNum);
     else SET_R16(cpu->main.pairs.HL, bitNum);
   }
+  else printf("undocumented cb inst %02x\n", inst);
 
   return cycles_cb[inst];
 }

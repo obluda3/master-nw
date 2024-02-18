@@ -1,5 +1,7 @@
 /lib/
 /output/
 /.vscode
+/tests/test_data
+/tests/test_bin
 *.SMS
 *.sms
