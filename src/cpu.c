@@ -107,12 +107,14 @@ INLINED void SBC_R8_R8(u8* reg, u8 reg2) {
   u8 reg1 = *reg;
   u8 c = cpu->main.singles.F.c;
   s16 result = reg1 - reg2 - c;
+
   u8 newVal = result & 0xFF;
   *reg = newVal;
+
   cpu->main.singles.F.c = result < 0;
   cpu->main.singles.F.n = 1;
-  cpu->main.singles.F.pv = overflow_flag8(reg1, ~reg2+1, newVal);
-  cpu->main.singles.F.h = ((reg1 & 0xF) - (reg2 & 0xF) - c) < 0xF;
+  cpu->main.singles.F.pv = (((reg1 ^ reg2) & (reg1 ^ result)) & 0x80) != 0;
+  cpu->main.singles.F.h = ((reg1 ^ reg2 ^ result) & 0x10) != 0;
   cpu->main.singles.F.z = newVal == 0;
   cpu->main.singles.F.s = (newVal & 0x80) != 0;
   cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
@@ -128,7 +130,7 @@ INLINED void update_flags_bitwise(u8 result) {
   cpu->main.singles.F.c = 0;
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.pv = parity(result);
-  cpu->main.singles.F.h = 1;
+  cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = (result & 0x80) != 0;
   cpu->main.singles.F.b3 = (result & 0x8) >> 3;
@@ -139,6 +141,7 @@ INLINED void AND_R8_R8(u8* reg, u8 reg2) {
   u8 result = *reg & reg2;
   *reg = result;
   update_flags_bitwise(result);
+  cpu->main.singles.F.h = 1;
 }
 
 INLINED void AND_R8_N(u8* reg) {
@@ -169,17 +172,18 @@ INLINED void OR_R8_N(u8* reg) {
 }
 
 u8 _SUB_8(u8 op1, u16 op2) {
-  s16 result = op1 - op2;
-  u8 newVal = result & 0xFF;
-  cpu->main.singles.F.c = result < 0;
+  int res = op1 - op2;
+  u8 result = (u8)res;
+  
+  cpu->main.singles.F.c = op2 > op1;
   cpu->main.singles.F.n = 1;
-  cpu->main.singles.F.pv = overflow_flag8(op1, ~op2 + 1, newVal);
+  cpu->main.singles.F.pv = ((op2 ^ op1) & (op1 ^ res) & 0x80) != 0;
   cpu->main.singles.F.h = (op1 & 0xF) < (op2 & 0xF);
-  cpu->main.singles.F.z = newVal == 0;
-  cpu->main.singles.F.s = (newVal & 0x80) != 0;
-  cpu->main.singles.F.b3 = (newVal & 0x8) >> 3;
-  cpu->main.singles.F.b5 = (newVal & 0x20) >> 5;
-  return newVal;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = (result & 0x80) != 0;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
+  return result;
 }
 
 INLINED void SUB_R8_R8(u8* reg, u8 reg2) {
@@ -189,6 +193,8 @@ INLINED void SUB_R8_R8(u8* reg, u8 reg2) {
 INLINED void CP_R8_R8(u8* reg, u8 reg2) {
   u8 r = *reg;
   SUB_R8_R8(reg, reg2);
+  cpu->main.singles.F.b3 = (reg2 & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (reg2 & 0x20) >> 5;
   *reg = r;
 }
 
@@ -437,6 +443,7 @@ INLINED void JP() {
 
 INLINED void JP_cond(bool condition) {
   if (condition) JP();
+  else cpu->PC += 2;
 }
 
 INLINED void CALL() {
@@ -449,6 +456,7 @@ INLINED void CALL_cond(bool condition) {
     bonus_cycles = 7;
     CALL();
   }
+  else cpu->PC += 2;
 }
 
 INLINED void EI() {
@@ -1715,7 +1723,7 @@ int execute_cpu(bool* halted) {
       RET_cond(cpu->main.singles.F.pv);
       break;
     case 0xE9:  // jp (hl)
-      cpu->PC = read_u16(cpu->main.pairs.HL);
+      cpu->PC = cpu->main.pairs.HL;
       break;
     case 0xEA:  // jp pe, nn
       JP_cond(cpu->main.singles.F.pv);
@@ -1738,19 +1746,19 @@ int execute_cpu(bool* halted) {
       RST(0x28);
       break;
     case 0xF0:  // ret p
-      RET_cond(!cpu->main.singles.F.n);
+      RET_cond(!cpu->main.singles.F.s);
       break;
     case 0xF1:  // pop af
       cpu->main.pairs.AF = POP();
       break;
     case 0xF2:  // jp p, nn
-      JP_cond(!cpu->main.singles.F.n);
+      JP_cond(!cpu->main.singles.F.s);
       break;
     case 0xF3:  // di
       DI();
       break;
     case 0xF4:  // call p, nn
-      CALL_cond(!cpu->main.singles.F.n);
+      CALL_cond(!cpu->main.singles.F.s);
       break;
     case 0xF5:  // push af
       PUSH(cpu->main.pairs.AF);
@@ -1762,19 +1770,19 @@ int execute_cpu(bool* halted) {
       RST(0x30);
       break;
     case 0xF8:  // ret m
-      RET_cond(cpu->main.singles.F.n);
+      RET_cond(cpu->main.singles.F.s);
       break;
     case 0xF9:  // ld sp, hl
       cpu->SP = cpu->main.pairs.HL;
       break;
     case 0xFA:  // jp m, nn
-      JP_cond(cpu->main.singles.F.n);
+      JP_cond(cpu->main.singles.F.s);
       break;
     case 0xFB:  // ei
       EI();
       break;
     case 0xFC:  // call m, nn
-      CALL_cond(cpu->main.singles.F.n);
+      CALL_cond(cpu->main.singles.F.s);
       break;
     case 0xFD:  // fd instructions
       execute_ddfd(false);
