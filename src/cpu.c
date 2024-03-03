@@ -477,6 +477,7 @@ INLINED void DI() {
 int execute_ddfd(bool dd) {
   u16* reg = dd ? &cpu->IX : &cpu->IY;
   u8 inst = read_u8(cpu->PC);
+  incr_r();
   cpu->PC++;
   #define ADDR() *reg + read_u8(cpu->PC++)
   switch (inst) {
@@ -625,6 +626,7 @@ INLINED void IN_R8_R8(u8* reg, u8 port) {
 
 int execute_ed() {
   u8 inst = read_u8(cpu->PC++);
+  incr_r();
   switch (inst) {
     case 0x40:
       IN_R8_R8(&cpu->main.singles.B, cpu->main.singles.C);
@@ -639,7 +641,7 @@ int execute_ed() {
       LD_NN_R16(read_u16(cpu->PC), cpu->main.pairs.BC);
       break;
     case 0x44:
-      _SUB_8(0, cpu->main.singles.A);
+      cpu->main.singles.A = _SUB_8(0, cpu->main.singles.A);
       break;
     case 0x45:
       cpu->PC = POP();
@@ -755,55 +757,71 @@ int execute_ed() {
     case 0x7B:
       LD_R16_NNa(&cpu->SP);
       break;
-    case 0xA0:
-      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+    case 0xA0: {
+      u8 writtenByte = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.DE, writtenByte);
       cpu->main.pairs.HL++;
       cpu->main.pairs.DE++;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      cpu->main.singles.F.b3 = ((cpu->main.singles.A + writtenByte) & 0x8) >> 3;
+      cpu->main.singles.F.b5 = ((cpu->main.singles.A + writtenByte) & 0x2) >> 1;
       break;
+    }
     case 0xA1: {
       u8 val = read_u8(cpu->main.pairs.HL);
       u8 result = cpu->main.singles.A - val;
       cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
       cpu->main.singles.F.z = result == 0;
       cpu->main.singles.F.s = result >> 7;
+      cpu->main.singles.F.n = 1;
+      result = result - cpu->main.singles.F.h;
+      cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (result & 0x2) >> 1;
       cpu->main.pairs.HL++;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
       break;
     }
-    case 0xA2:
+    case 0xA2: {
       write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
       cpu->main.pairs.HL++;
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       break;
+    }
     case 0xA3:
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
       cpu->main.pairs.HL++;
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       break;
-    case 0xA8:
-      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+    case 0xA8: {
+      u8 writtenByte = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.DE, writtenByte);
       cpu->main.pairs.HL--;
       cpu->main.pairs.DE--;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      cpu->main.singles.F.b3 = ((cpu->main.singles.A + writtenByte) & 0x8) >> 3;
+      cpu->main.singles.F.b5 = ((cpu->main.singles.A + writtenByte) & 0x2) >> 1;
       break;
+    }
     case 0xA9: {
       u8 val = read_u8(cpu->main.pairs.HL);
       u8 result = cpu->main.singles.A - val;
       cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
       cpu->main.singles.F.z = result == 0;
       cpu->main.singles.F.s = result >> 7;
+      result = result - cpu->main.singles.F.h;
+      cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (result & 0x2) >> 1;
       cpu->main.pairs.HL--;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
@@ -812,36 +830,44 @@ int execute_ed() {
     case 0xAA:
       write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
       cpu->main.pairs.HL--;
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       break;
     case 0xAB:
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
       cpu->main.pairs.HL--;
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       break;
-    case 0xB0:
-      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+    case 0xB0: {
+      u8 writtenByte = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.DE, writtenByte);
       cpu->main.pairs.HL++;
       cpu->main.pairs.DE++;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      cpu->main.singles.F.b3 = ((cpu->main.singles.A + writtenByte) & 0x8) >> 3;
+      cpu->main.singles.F.b5 = ((cpu->main.singles.A + writtenByte) & 0x2) >> 1;
       if (cpu->main.pairs.BC != 0) {
         bonus_cycles = 5;
         cpu->PC -= 2;
       }
       break;
+    }
     case 0xB1: {
       u8 val = read_u8(cpu->main.pairs.HL);
       u8 result = cpu->main.singles.A - val;
       cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
       cpu->main.singles.F.z = result == 0;
       cpu->main.singles.F.s = result >> 7;
+      cpu->main.singles.F.n = 1;
+      result = result - cpu->main.singles.F.h;
+      cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (result & 0x2) >> 1;
       cpu->main.pairs.HL++;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
@@ -854,7 +880,7 @@ int execute_ed() {
     case 0xB2:
       write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
       cpu->main.pairs.HL++;
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       if (cpu->main.singles.B != 0) {
@@ -863,7 +889,7 @@ int execute_ed() {
       }
       break;
     case 0xB3:
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
       cpu->main.pairs.HL++;
       cpu->main.singles.F.n = 1;
@@ -873,25 +899,33 @@ int execute_ed() {
         cpu->PC -= 2;
       }
       break;
-    case 0xB8:
-      write_u8(cpu->main.pairs.DE, read_u8(cpu->main.pairs.HL));
+    case 0xB8: {
+      u8 writtenByte = read_u8(cpu->main.pairs.HL);
+      write_u8(cpu->main.pairs.DE, writtenByte);
       cpu->main.pairs.HL--;
       cpu->main.pairs.DE--;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.n = 0;
       cpu->main.singles.F.h = 0;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
+      cpu->main.singles.F.b3 = ((cpu->main.singles.A + writtenByte) & 0x8) >> 3;
+      cpu->main.singles.F.b5 = ((cpu->main.singles.A + writtenByte) & 0x2) >> 1;
       if (cpu->main.pairs.BC != 0) {
         bonus_cycles = 5;
         cpu->PC -= 2;
       }
       break;
+    }
     case 0xB9: {
       u8 val = read_u8(cpu->main.pairs.HL);
       u8 result = cpu->main.singles.A - val;
       cpu->main.singles.F.h = (cpu->main.singles.A & 0xF) < (val & 0x0F);
       cpu->main.singles.F.z = result == 0;
       cpu->main.singles.F.s = result >> 7;
+      cpu->main.singles.F.n = 1;
+      result = result - cpu->main.singles.F.h;
+      cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+      cpu->main.singles.F.b5 = (result & 0x2) >> 1;
       cpu->main.pairs.HL--;
       cpu->main.pairs.BC--;
       cpu->main.singles.F.pv = cpu->main.pairs.BC != 0;
@@ -904,7 +938,7 @@ int execute_ed() {
     case 0xBA:
       write_u8(cpu->main.pairs.HL, read_io(cpu->main.singles.C));
       cpu->main.pairs.HL--;
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       cpu->main.singles.F.n = 1;
       cpu->main.singles.F.z = cpu->main.singles.B == 0;
       if (cpu->main.singles.B != 0) {
@@ -913,7 +947,7 @@ int execute_ed() {
       }
       break;
     case 0xBB:
-      cpu->main.singles.B--;
+      DEC_R8(&cpu->main.singles.B);
       write_io(cpu->main.singles.C, read_u8(cpu->main.pairs.HL));
       cpu->main.pairs.HL--;
       cpu->main.singles.F.n = 1;
@@ -2064,6 +2098,7 @@ int execute_cb() {
 
 int execute_displacedcb(u16* reg) {
   u8 inst = read_u8(cpu->PC++);
+  incr_r();
   int bitNum = (inst & 0b00111000) >> 3;
   if (inst < 0x40) {
     switch (inst) {
