@@ -93,6 +93,11 @@ INLINED bool parity(u8 value) {
   return !((0x6996 >> value) & 1);
 }
 
+INLINED void incr_r() {
+  cpu->R++;
+  cpu->R = cpu->R & 0x7F;
+}
+
 void init_cpu(Z80* CPU) {
   cpu = CPU;
   memset(cpu, 0, sizeof(Z80));
@@ -930,8 +935,7 @@ int execute_ed() {
 
 int execute_cpu(bool* halted) {
   u8 inst = read_u8(cpu->PC++);
-  cpu->R++;
-  cpu->R = cpu->R & 0x7F;
+  incr_r();
 
   switch (inst) {
     case 0x0:
@@ -1852,6 +1856,8 @@ INLINED u8 _RL(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1871,6 +1877,8 @@ INLINED u8 _RR(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1891,6 +1899,8 @@ INLINED u8 _SLA(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1911,6 +1921,8 @@ INLINED u8 _SRA(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1930,6 +1942,8 @@ INLINED u8 _SRL(u8 val) {
   cpu->main.singles.F.h = 0;
   cpu->main.singles.F.z = result == 0;
   cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
   return result;
 }
 
@@ -1946,8 +1960,10 @@ INLINED void BIT(u8 val, int bitNum) {
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.h = 1;
   cpu->main.singles.F.z = bit == 0;
-  cpu->main.singles.F.b3 = bitNum == 3 ? bit : 0;
-  cpu->main.singles.F.b5 = bitNum == 5 ? bit : 0;
+  cpu->main.singles.F.pv = bit == 0;
+  cpu->main.singles.F.s = bitNum == 7 ? bit : 0;
+  cpu->main.singles.F.b3 = (val & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (val & 0x20) >> 5;
 }
 
 INLINED u8 _RES(u8 val, int bitNum) {
@@ -1977,6 +1993,7 @@ INLINED void SET_R16(u16 addr, int bitNum) {
 int execute_cb() {
   // trying to implement decoding to make the process easier
   u8 inst = read_u8(cpu->PC++);
+  incr_r();
   u8* reg = 0;
   u8 regNum = inst & 7;
   switch (regNum) {
@@ -2025,7 +2042,9 @@ int execute_cb() {
   else if (inst < 0x80) {
     u8 bitNum = (inst & 0b00111000) >> 3;
     if (reg) BIT(*reg, bitNum);
-    else BIT(read_u8(cpu->main.pairs.HL), bitNum);
+    else {
+      BIT(read_u8(cpu->main.pairs.HL), bitNum);
+    }
   }
   
   else if (inst < 0xC0) {
@@ -2034,12 +2053,11 @@ int execute_cb() {
     else RES_R16(cpu->main.pairs.HL, bitNum);
   }
 
-  else if (inst < 0xC0) {
+  else {
     u8 bitNum = (inst & 0b00111000) >> 3;
     if (reg) SET_R8(reg, bitNum);
     else SET_R16(cpu->main.pairs.HL, bitNum);
   }
-  else printf("undocumented cb inst %02x\n", inst);
 
   return cycles_cb[inst];
 }
