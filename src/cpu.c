@@ -268,7 +268,7 @@ INLINED void INC_R16(u16* reg) {
 }
 
 INLINED void INC_R16a(u16 addr) {
-  u8 value = read_u16(addr);
+  u8 value = read_u8(addr);
   u8 result = value + 1;
 
   cpu->main.singles.F.n = 0;
@@ -479,7 +479,7 @@ int execute_ddfd(bool dd) {
   u8 inst = read_u8(cpu->PC);
   incr_r();
   cpu->PC++;
-  #define ADDR() *reg + read_u8(cpu->PC++)
+  #define ADDR() *reg + (s8)read_u8(cpu->PC++)
   switch (inst) {
     case 0x09:  // add ixiy, bc
       ADD_R16_R16(reg, &cpu->main.pairs.BC);
@@ -561,28 +561,28 @@ int execute_ddfd(bool dd) {
       LD_R8_R16(&cpu->main.singles.A, ADDR());
       break;
     case 0x86:  // add a, (ix+d)
-      ADD_R8_R8(&cpu->main.singles.A, ADDR());
+      ADD_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0x8E:  // adc a, (ix+d)
-      ADC_R8_R8(&cpu->main.singles.A, ADDR());
+      ADC_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0x96:  // sub (ix+d)
-      SUB_R8_R8(&cpu->main.singles.A, ADDR());
+      SUB_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0x9E:  // sbc a, (ix+d)
-      SUB_R8_R8(&cpu->main.singles.A, ADDR());
+      SUB_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xA6:  // and (ix+d)
-      AND_R8_R8(&cpu->main.singles.A, ADDR());
+      AND_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xAE:  // xor (ix+d)
-      XOR_R8_R8(&cpu->main.singles.A, ADDR());
+      XOR_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xB6:  // or (ix+d)
-      OR_R8_R8(&cpu->main.singles.A, ADDR());
+      OR_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xBE:  // cp (ix+d)
-      CP_R8_R8(&cpu->main.singles.A, ADDR());
+      CP_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xCB:  // cb ix
       execute_displacedcb(reg);
@@ -592,7 +592,7 @@ int execute_ddfd(bool dd) {
       break;
     case 0xE3:{  // ex (sp), iy
       u16 tmp = read_u16(cpu->SP);
-      cpu->SP = *reg;
+      write_u16(cpu->SP, *reg);
       *reg = tmp;
       break;
     }
@@ -600,7 +600,7 @@ int execute_ddfd(bool dd) {
       PUSH(*reg);
       break;
     case 0xE9:  // jp (ix)
-      cpu->PC = read_u16(*reg);
+      cpu->PC = *reg;
       break;
     case 0xF9:  // ld sp, ix
       cpu->SP = *reg;
