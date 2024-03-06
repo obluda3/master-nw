@@ -2097,36 +2097,36 @@ int execute_cb() {
 }
 
 int execute_displacedcb(u16* reg) {
+  u16 displacedAddress = *reg + (s8)read_u8(cpu->PC++);
   u8 inst = read_u8(cpu->PC++);
-  incr_r();
   int bitNum = (inst & 0b00111000) >> 3;
   if (inst < 0x40) {
     switch (inst) {
       case 0x06:
-        RLC_R16(ADDR());
+        RLC_R16(displacedAddress);
         break;
       case 0x0e: 
-        RRC_R16(ADDR());
+        RRC_R16(displacedAddress);
         break;
       case 0x16:
-        RL_R16(ADDR());
+        RL_R16(displacedAddress);
         break;
       case 0x1E:
-        RR_R16(ADDR());
+        RR_R16(displacedAddress);
         break;
       case 0x26:
-        SLA_R16(ADDR());
+        SLA_R16(displacedAddress);
         break;
       case 0x2E:
-        SRA_R16(ADDR());
+        SRA_R16(displacedAddress);
         break;
       case 0x3E:
-        SRL_R16(ADDR());
+        SRL_R16(displacedAddress);
         break;
     }
   }
-  else if (inst < 0x80) BIT(read_u8(ADDR()), bitNum);
-  else if (inst < 0xC0) RES_R16(ADDR(), bitNum);
-  else SET_R16(ADDR(), bitNum);
+  else if (inst < 0x80) BIT(read_u8(displacedAddress), bitNum);
+  else if (inst < 0xC0) RES_R16(displacedAddress, bitNum);
+  else SET_R16(displacedAddress, bitNum);
   return cycles_cb[inst];
 } 
