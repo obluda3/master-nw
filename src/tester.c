@@ -21,7 +21,7 @@ void unit_test(Emu *emu, char *filename)
     fread(&count, 2, 1, f);
     for (int i = 0; i < count; i++)
     {
-        printf("Test %d / %d: ", i, count);
+        printf("Test %d / %d: \n", i+1, count);
         test_case(emu, f);
     }
     printf("ok\n");
