@@ -585,8 +585,7 @@ int execute_ddfd(bool dd) {
       CP_R8_R8(&cpu->main.singles.A, read_u8(ADDR()));
       break;
     case 0xCB:  // cb ix
-      execute_displacedcb(reg);
-      break;
+      return execute_displacedcb(reg);
     case 0xE1:  // pop ix
       *reg = POP();
       break;
@@ -1989,7 +1988,28 @@ INLINED void SRL_R16(u16 addr) {
   write_u8(addr, _SRL(read_u8(addr)));
 }
 
-INLINED void BIT(u8 val, int bitNum) {
+INLINED u8 _SLL(u8 val) {
+  u8 result = ((val << 1) & 0xFF) | 1;
+  cpu->main.singles.F.c = (val & 0x80) >> 7;
+  cpu->main.singles.F.n = 0;
+  cpu->main.singles.F.pv = parity(result);
+  cpu->main.singles.F.h = 0;
+  cpu->main.singles.F.z = result == 0;
+  cpu->main.singles.F.s = result >> 7;
+  cpu->main.singles.F.b3 = (result & 0x8) >> 3;
+  cpu->main.singles.F.b5 = (result & 0x20) >> 5;
+  return result;
+}
+
+INLINED void SLL_R8(u8* reg) {
+    *reg = _SLL(*reg);
+}
+
+INLINED void SLL_R16(u16 addr) {
+  write_u8(addr, _SLL(read_u8(addr)));
+}
+
+INLINED u8 BIT(u8 val, int bitNum) {
   u8 bit = (val >> bitNum) & 1;
   cpu->main.singles.F.n = 0;
   cpu->main.singles.F.h = 1;
@@ -1998,6 +2018,7 @@ INLINED void BIT(u8 val, int bitNum) {
   cpu->main.singles.F.s = bitNum == 7 ? bit : 0;
   cpu->main.singles.F.b3 = (val & 0x8) >> 3;
   cpu->main.singles.F.b5 = (val & 0x20) >> 5;
+  return val;
 }
 
 INLINED u8 _RES(u8 val, int bitNum) {
@@ -2024,74 +2045,71 @@ INLINED void SET_R16(u16 addr, int bitNum) {
   write_u8(addr, _SET(read_u8(addr), bitNum));
 }
 
-int execute_cb() {
-  // trying to implement decoding to make the process easier
-  u8 inst = read_u8(cpu->PC++);
-  incr_r();
-  u8* reg = 0;
-  u8 regNum = inst & 7;
-  switch (regNum) {
-    case 0: reg = &cpu->main.singles.B; break;
-    case 1: reg = &cpu->main.singles.C; break;
-    case 2: reg = &cpu->main.singles.D; break;
-    case 3: reg = &cpu->main.singles.E; break;
-    case 4: reg = &cpu->main.singles.H; break;
-    case 5: reg = &cpu->main.singles.L; break;
-    case 7: reg = &cpu->main.singles.A; break;
-  }
-
+u8 execute_bitwise(u8 inst, u8 input) {
   if (inst < 0x40) {
     switch ((inst & 0b00111000) >> 3) {
       case 0: 
-        if (reg) RLC_R8(reg);
-        else RLC_R16(cpu->main.pairs.HL);
-        break;
+        return _RLC(input);
       case 1: 
-        if (reg) RRC_R8(reg);
-        else RRC_R16(cpu->main.pairs.HL);
-        break;
+        return _RRC(input);
       case 2: 
-        if (reg) RL_R8(reg);
-        else RL_R16(cpu->main.pairs.HL);
-        break;
+        return _RL(input);
       case 3: 
-        if (reg) RR_R8(reg);
-        else RR_R16(cpu->main.pairs.HL);
-        break;
+        return _RR(input);
       case 4: 
-        if (reg) SLA_R8(reg);
-        else SLA_R16(cpu->main.pairs.HL);
-        break;
+        return _SLA(input);
       case 5: 
-        if (reg) SRA_R8(reg);
-        else SRA_R16(cpu->main.pairs.HL);
-        break;
+        return _SRA(input);
+      case 6:
+        return _SLL(input);
       case 7: 
-        if (reg) SRL_R8(reg);
-        else SRL_R16(cpu->main.pairs.HL);
-        break;
+        return _SRL(input);
     }
   }
 
   else if (inst < 0x80) {
     u8 bitNum = (inst & 0b00111000) >> 3;
-    if (reg) BIT(*reg, bitNum);
-    else {
-      BIT(read_u8(cpu->main.pairs.HL), bitNum);
-    }
+    return BIT(input, bitNum);
   }
   
   else if (inst < 0xC0) {
     u8 bitNum = (inst & 0b00111000) >> 3;
-    if (reg) RES_R8(reg, bitNum);
-    else RES_R16(cpu->main.pairs.HL, bitNum);
+    return _RES(input, bitNum);
   }
 
   else {
     u8 bitNum = (inst & 0b00111000) >> 3;
-    if (reg) SET_R8(reg, bitNum);
-    else SET_R16(cpu->main.pairs.HL, bitNum);
+    return _SET(input, bitNum);
   }
+}
+u8* get_register(u8 inst) {
+  u8 regNum = inst & 7;
+  u8 input;
+  switch (regNum) {
+    case 0: return &cpu->main.singles.B;
+    case 1: return &cpu->main.singles.C;
+    case 2: return &cpu->main.singles.D;
+    case 3: return &cpu->main.singles.E;
+    case 4: return &cpu->main.singles.H;
+    case 5: return &cpu->main.singles.L;
+    case 7: return &cpu->main.singles.A;
+  }
+  return 0;
+}
+
+int execute_cb() {
+  // trying to implement decoding to make the process easier
+  u8 inst = read_u8(cpu->PC++);
+  incr_r();
+
+  u8* reg = get_register(inst);
+  u8 input;
+  if (reg) input = *reg;
+  else input = read_u8(cpu->main.pairs.HL);
+
+  u8 result = execute_bitwise(inst, input);
+  if (reg) *reg = result;
+  else write_u8(cpu->main.pairs.HL, result);
 
   return cycles_cb[inst];
 }
@@ -2099,34 +2117,13 @@ int execute_cb() {
 int execute_displacedcb(u16* reg) {
   u16 displacedAddress = *reg + (s8)read_u8(cpu->PC++);
   u8 inst = read_u8(cpu->PC++);
-  int bitNum = (inst & 0b00111000) >> 3;
-  if (inst < 0x40) {
-    switch (inst) {
-      case 0x06:
-        RLC_R16(displacedAddress);
-        break;
-      case 0x0e: 
-        RRC_R16(displacedAddress);
-        break;
-      case 0x16:
-        RL_R16(displacedAddress);
-        break;
-      case 0x1E:
-        RR_R16(displacedAddress);
-        break;
-      case 0x26:
-        SLA_R16(displacedAddress);
-        break;
-      case 0x2E:
-        SRA_R16(displacedAddress);
-        break;
-      case 0x3E:
-        SRL_R16(displacedAddress);
-        break;
-    }
-  }
-  else if (inst < 0x80) BIT(read_u8(displacedAddress), bitNum);
-  else if (inst < 0xC0) RES_R16(displacedAddress, bitNum);
-  else SET_R16(displacedAddress, bitNum);
-  return cycles_cb[inst];
+  u8 input = read_u8(displacedAddress);
+
+  u8* resultReg = get_register(inst);
+  u8 result = execute_bitwise(inst, input);
+  if (resultReg) *resultReg = result;
+  else write_u8(displacedAddress, result);
+
+  if (inst < 0x80 && inst >= 0x40) return 20;
+  return 23;
 } 

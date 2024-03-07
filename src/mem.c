@@ -36,9 +36,6 @@ void update_pages(u16 addr, u8 data) {
 }
 
 void write_u8(u16 addr, u8 data) {
-  mem->internal_memory[addr] = data;
-  return;
-
   // writing to rom is impossible
   if (addr < 0x8000) {
     return;
@@ -62,9 +59,6 @@ void write_u8(u16 addr, u8 data) {
 }
 
 u8 read_u8(u16 addr) {
-  return mem->internal_memory[addr];
-
-
   if (addr < 0x4000) return mem->cartridge_memory[0x4000 * slot1 + addr];
   if (addr < 0x8000) return mem->cartridge_memory[0x4000 * slot2 + (addr - 0x4000)];
   if (addr < 0xC000) {
