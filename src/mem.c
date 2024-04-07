@@ -8,7 +8,6 @@ u8 slot1 = 0;
 u8 slot2 = 1;
 u8 slot3 = 2;
 u8 ram_bank = 0;
-u8 current_keys = 0xFF;
 bool ram_slot3 = false;
 
 void init_mem(Memory* memory, const char* cartridge) {
@@ -49,9 +48,9 @@ void write_u8(u16 addr, u8 data) {
     mem->ram_banks[ram_bank][real_addr] = data;
     return;
   }
-
   mem->internal_memory[addr] = data;
-  if (addr >= 0xFFFC) update_pages(addr, data);
+  if (addr >= 0xFFFC)
+    update_pages(addr, data);
 
   // memory mirroring
   u16 mirrorred = addr - 0xC000 >= 0x2000 ? addr - 0x2000 : addr + 0x2000;
@@ -75,25 +74,4 @@ u16 read_u16(u16 addr) {
 void write_u16(u16 addr, u16 data) {
   write_u8(addr, data & 0xFF);
   write_u8(addr + 1, (data & 0xFF00) >> 8);
-}
-
-u8 read_io(u16 addr) {
-  switch (addr) {
-    case 0xDC: case 0xC0:
-      return 0;
-    case 0xDD: case 0xC1:
-      return 0xFF;
-    case 0x7E: case 0x7F: case 0xBE: case 0xBF:
-      return vdp_read_io(addr);
-    default: 
-      return 0;
-  }
-}
-
-void set_input(u8 val) { current_keys = val; }
-
-void write_io(u16 addr, u8 value) {
-  switch (addr) {
-    case 0xBE: case 0xBF: vdp_write_io(addr, value);
-  }
 }

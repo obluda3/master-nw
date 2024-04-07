@@ -1,6 +1,7 @@
 #include "cpu.h"
 #include <string.h>
 #include <stdio.h>
+#include "io.h"
 #include "mem.h"
 
 #define INLINED __attribute__((always_inline)) inline
@@ -474,6 +475,7 @@ INLINED void DI() {
   cpu->FF2 = false;
 }
 
+int call_cnt = 0;
 int execute_ddfd(bool dd) {
   u16* reg = dd ? &cpu->IX : &cpu->IY;
   u8 inst = read_u8(cpu->PC);
@@ -499,9 +501,16 @@ int execute_ddfd(bool dd) {
     case 0x29:  // add ixiy, ixiy
       ADD_R16_R16(reg, reg);
       break;
-    case 0x2A:  // ld ix, (nn)
-      LD_R16_NN(reg);
+    case 0x2A:  { // ld ix, (nn) 
+      call_cnt += 1;
+      if (call_cnt == 34) {
+        LD_R16_NN(reg);
+      }
+      else {
+        LD_R16_NNa(reg);
+      }
       break;
+    }
     case 0x2B:  // dec ixiy
       DEC_R16(reg);
       break;
@@ -511,10 +520,13 @@ int execute_ddfd(bool dd) {
     case 0x35:  // dec (ixiy + d)
       DEC_R16a(ADDR());
       break;
-    case 0x36:  // ld (ixiy + d), n
-      write_u8(ADDR(), read_u8(cpu->PC));
+    case 0x36: { // ld (ixiy + d), n
+      u16 addr = ADDR();
+      u8 val = read_u8(cpu->PC);
+      write_u8(addr, val);
       cpu->PC++;
       break;
+    }
     case 0x39:  // add ixiy, sp
       ADD_R16_R16(reg, &cpu->SP);
       break;
@@ -738,6 +750,14 @@ int execute_ed() {
       cpu->main.singles.F.s = result >> 7;
       break; 
     }
+    case 0x70: {
+      u8 result = 0;
+      IN_R8_R8(&result, cpu->main.singles.C);
+      break;
+    }
+    case 0x71:
+      write_io(cpu->main.singles.C, 0);
+      break;
     case 0x72:
       SBC_R16_R16(&cpu->main.pairs.HL, cpu->SP);
       break;
@@ -969,7 +989,6 @@ int execute_ed() {
 int execute_cpu(bool* halted) {
   u8 inst = read_u8(cpu->PC++);
   incr_r();
-
   switch (inst) {
     case 0x0:
       break;
@@ -2048,6 +2067,7 @@ INLINED void SET_R16(u16 addr, int bitNum) {
 u8 execute_bitwise(u8 inst, u8 input) {
   if (inst < 0x40) {
     switch ((inst & 0b00111000) >> 3) {
+      default:
       case 0: 
         return _RLC(input);
       case 1: 
@@ -2077,10 +2097,8 @@ u8 execute_bitwise(u8 inst, u8 input) {
     return _RES(input, bitNum);
   }
 
-  else {
-    u8 bitNum = (inst & 0b00111000) >> 3;
-    return _SET(input, bitNum);
-  }
+  u8 bitNum = (inst & 0b00111000) >> 3;
+  return _SET(input, bitNum);
 }
 u8* get_register(u8 inst) {
   u8 regNum = inst & 7;

@@ -2,10 +2,13 @@
 #include "cpu.h"
 #include "time.h"
 #include <stdio.h>
+#include "io.h"
 #include <stdlib.h>
 #include "vdp.h"
 #include "platform.h"
 #include <string.h>
+#include "inst.h"
+
 bool halted = false;
 void handle_interrupts(Emu* emu, bool reset) {
   if (emu->cpu.FF2 && reset) {
@@ -179,23 +182,21 @@ u8 get_input() {
   u8 current_keys = 0;
   #ifndef TARGET_LINUX
   eadk_keyboard_state_t keyboardState = eadk_keyboard_scan();
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_up);
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
-  current_keys |= !eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
-  current_keys |= 0b11000000;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_left) << 2;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
+  current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
   #else
-  current_keys |= !IsKeyDown(KEY_UP);
-  current_keys |= !IsKeyDown(KEY_DOWN) << 1;
-  current_keys |= !IsKeyDown(KEY_LEFT) << 2;
-  current_keys |= !IsKeyDown(KEY_RIGHT) << 3;
-  current_keys |= !IsKeyDown(KEY_W) << 4;
-  current_keys |= !IsKeyDown(KEY_X) << 5;
-  current_keys |= 0b11000000;
+  current_keys |= IsKeyDown(KEY_UP);
+  current_keys |= IsKeyDown(KEY_DOWN) << 1;
+  current_keys |= IsKeyDown(KEY_LEFT) << 2;
+  current_keys |= IsKeyDown(KEY_RIGHT) << 3;
+  current_keys |= IsKeyDown(KEY_W) << 4;
+  current_keys |= IsKeyDown(KEY_X) << 5;
   #endif
-  return current_keys;
+  return ~current_keys;
 }
 
 void emu_loop(Emu* emu) {
@@ -206,13 +207,9 @@ void emu_loop(Emu* emu) {
     int currentFrameTicks = 0;
     
     set_input(get_input());
-    while (currentFrameTicks < ticksPerFrame) {    
-      /*printf("PC=%04x\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
-                  main->singles.B, main->singles.C, alt->singles.B, alt->singles.C, 
-                  main->singles.D, main->singles.E, alt->singles.D, alt->singles.E, 
-                  main->singles.H, main->singles.L, alt->singles.H, alt->singles.L, 
-                  emu->cpu.IX, emu->cpu.IY, emu->cpu.SP, emu->cpu.I, emu->cpu.R );
-      getchar();*/
+    bool deb = false;
+    int target = 0x43;
+    while (currentFrameTicks < ticksPerFrame) {
       currentFrameTicks += step(emu);
     }
     #ifdef TARGET_LINUX
