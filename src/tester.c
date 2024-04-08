@@ -145,14 +145,14 @@ void test_case(Emu *emu, FILE *f)
         fread(&address, 2, 1, f);
         fread(&data, 1, 1, f);
         sprintf(message, "RAM %d:\t%s%d\t%s%d%s\n", address, RED, emu->mem.internal_memory[address], GRN, data, RESET);
-        if (emu->mem.internal_memory[address] != data) (ram_message, message);
+        if (emu->mem.internal_memory[address] != data) strcat(ram_message, message);
     }
     
     if (strlen(cpu_message) || strlen(ram_message))
     {
         printf(RED "NOT OK\n" RESET);
-        printf(cpu_message);
-        printf(ram_message);
+        printf("%s", cpu_message);
+        printf("%s", ram_message);
         getchar();
     }
     else
