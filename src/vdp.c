@@ -50,8 +50,7 @@ void vdp_init(VDP* _vdp) {
   memset(vdp, 0, sizeof(*vdp));
 }
 #ifdef TARGET_LINUX
-typedef Color color;
-color framebuffer[256*192];
+
 color conversion_table[] = { { 0, 0, 0, 255 }, { 85, 0, 0, 255 }, { 170, 0, 0, 255 }, { 255, 0, 0, 255 }, { 0, 85, 0, 255 }, { 85, 85, 0, 255 }, { 170, 85, 0, 255 }, { 255, 85, 0, 255 }, 
 { 0, 170, 0, 255 }, { 85, 170, 0, 255 }, { 170, 170, 0, 255 }, { 255, 170, 0, 255 }, { 0, 255, 0, 255 }, { 85, 255, 0, 255 }, { 170, 255, 0, 255 }, { 255, 255, 0, 255 }, 
 { 0, 0, 85, 255 }, { 85, 0, 85, 255 }, { 170, 0, 85, 255 }, { 255, 0, 85, 255 }, { 0, 85, 85, 255 }, { 85, 85, 85, 255 }, { 170, 85, 85, 255 }, { 255, 85, 85, 255 }, 
@@ -62,7 +61,6 @@ color conversion_table[] = { { 0, 0, 0, 255 }, { 85, 0, 0, 255 }, { 170, 0, 0, 2
 { 0, 170, 255, 255 }, { 85, 170, 255, 255 }, { 170, 170, 255, 255 }, { 255, 170, 255, 255 }, { 0, 255, 255, 255 }, { 85, 255, 255, 255 }, { 170, 255, 255, 255 }, { 255, 255, 255, 255 },  };
 
 #else
-typedef eadk_color_t color;
 color conversion_table[64] =  { 0x0000, 0x5000, 0xa000, 0xf800, 0x02a0, 0x52a0, 0xa2a0, 0xfaa0, 
                                 0x0540, 0x5540, 0xa540, 0xfd40, 0x07e0, 0x57e0, 0xa7e0, 0xffe0, 
                                 0x000a, 0x500a, 0xa00a, 0xf80a, 0x02aa, 0x52aa, 0xa2aa, 0xfaaa, 
@@ -73,7 +71,6 @@ color conversion_table[64] =  { 0x0000, 0x5000, 0xa000, 0xf800, 0x02a0, 0x52a0, 
                                 0x055f, 0x555f, 0xa55f, 0xfd5f, 0x07ff, 0x57ff, 0xa7ff, 0xffff, };
 #endif
 
-
 void draw_line(u8 y, u8* line) {
   color lineBuffer[256];
   for (int x = 0; x < 256; x++) {
@@ -82,21 +79,7 @@ void draw_line(u8 y, u8* line) {
   }
 
   #ifdef TARGET_LINUX
-  memcpy(framebuffer + y*256, lineBuffer, sizeof(lineBuffer));
-  if (y == 127) {
-    BeginDrawing();
-    for (int y = 0; y < 192; y++) {
-      for (int x = 0; x < 256; x++) {
-        color px = framebuffer[y*256+x];
-        DrawPixel(x*2, y*2, px);
-        DrawPixel(x*2+1, y*2, px);
-        DrawPixel(x*2, y*2+1, px);
-        DrawPixel(x*2+1, y*2+1, px);
-      }
-    }
-    EndDrawing();
-    memset(framebuffer, sizeof(framebuffer), 0);
-  }
+  memcpy(vdp->framebuffer + y*256, lineBuffer, sizeof(lineBuffer));
   #else
   //eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
   #endif
@@ -179,7 +162,7 @@ void process_line() {
   u16 addr = get_name_table();
   u16* nameTable = (u16*)&vdp->vram[addr];
   int line = y / 8;
-  int yInLine = y - line*8;
+  int yInLine = y % 8;
   for (int col = 0; col < 32; col++) {
     u16 tileInfo = nameTable[col + line*32];
     u16 patternIndex = tileInfo & 0x1FF;

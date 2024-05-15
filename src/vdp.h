@@ -1,5 +1,12 @@
 #pragma once
 #include "types.h"
+#include "platform.h"
+
+#ifdef TARGET_LINUX
+typedef Color color;
+#else
+typedef eadk_color_t color;
+#endif
 
 typedef struct {
   u8 vram[0x4000];
@@ -13,6 +20,7 @@ typedef struct {
   bool frameInterrupt;
   bool lineInterrupt;
   u8 vscroll;
+  color framebuffer[256*192];
 } VDP;
 
 void vdp_init(VDP* _vdp);

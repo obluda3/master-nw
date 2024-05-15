@@ -9,6 +9,9 @@
 #include <string.h>
 #include "inst.h"
 
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
+
 bool halted = false;
 void handle_interrupts(Emu* emu, bool reset) {
   if (emu->cpu.FF2 && reset) {
@@ -39,148 +42,9 @@ int step(Emu* emu) {
   return machineTicks;
 }
 
-#ifdef DEBUG
-#include "inst.h"
-char* get_inst(Emu* emu) {
-  char* op;
-  u8 opcode = read_u8(emu->cpu.PC);
-  op = op_names[opcode];
-  if (opcode == 0xCB) op = cb_names[read_u8(emu->cpu.PC+1)];
-  else if (opcode == 0xDD) {
-    u8 op2 = read_u8(emu->cpu.PC+1);
-    if (op2 != 0xCB) op = dd_names[op2];
-    else op = ddcb_names[read_u8(emu->cpu.PC+2)];
-  }
-  else if (opcode == 0xFD) {
-    u8 op2 = read_u8(emu->cpu.PC+1);
-    if (op2 != 0xCB) op = fd_names[op2];
-    else op = fdcb_names[read_u8(emu->cpu.PC+2)];
-  }
-  else if (opcode == 0xED) {
-    u8 op2 = read_u8(emu->cpu.PC+1);
-    op = ed_names[op2];
-  }
-  return op;
-}
-
-int get_breakpoint() {
-  char input[64] = {0};
-  for (int i = 0; i < 64; i++) input[i] = '\0';
-  input[0] = '0';
-  int len = 1;
-  #define PUSHCHAR(c) input[len] = c; len++; eadk_timing_msleep(250);
-  while (1) {
-    eadk_keyboard_state_t keys = eadk_keyboard_scan();
-    if (eadk_keyboard_key_down(keys, eadk_key_exe)) {
-      eadk_timing_millis(500);
-      return (int)strtol(input, NULL, 16);
-    }
-    if (eadk_keyboard_key_down(keys, eadk_key_back)) {
-      return -1;
-    }
-    if (eadk_keyboard_key_down(keys, eadk_key_backspace) && len > 0) {
-        input[len-1] = ' ';
-        eadk_display_draw_string(input, (eadk_point_t){100, 115}, false, eadk_color_white, eadk_color_black);
-        input[len-1] = '\0';
-        len--;
-        eadk_timing_msleep(250);
-    }
-
-    if (len < 8) {
-      if (eadk_keyboard_key_down(keys, eadk_key_zero)) { PUSHCHAR('0') };
-      if (eadk_keyboard_key_down(keys, eadk_key_one)) { PUSHCHAR('1') };
-      if (eadk_keyboard_key_down(keys, eadk_key_two)) { PUSHCHAR('2') };
-      if (eadk_keyboard_key_down(keys, eadk_key_three)) { PUSHCHAR('3') };
-      if (eadk_keyboard_key_down(keys, eadk_key_four)) { PUSHCHAR('4') };
-      if (eadk_keyboard_key_down(keys, eadk_key_five)) { PUSHCHAR('5') };
-      if (eadk_keyboard_key_down(keys, eadk_key_six)) { PUSHCHAR('6') };
-      if (eadk_keyboard_key_down(keys, eadk_key_seven)) { PUSHCHAR('7') };
-      if (eadk_keyboard_key_down(keys, eadk_key_eight)) { PUSHCHAR('8') };
-      if (eadk_keyboard_key_down(keys, eadk_key_nine)) { PUSHCHAR('9') };
-      if (eadk_keyboard_key_down(keys, eadk_key_exp)) { PUSHCHAR('A') };
-      if (eadk_keyboard_key_down(keys, eadk_key_ln)) { PUSHCHAR('B') };
-      if (eadk_keyboard_key_down(keys, eadk_key_log)) { PUSHCHAR('C') };
-      if (eadk_keyboard_key_down(keys, eadk_key_imaginary)) { PUSHCHAR('D') };
-      if (eadk_keyboard_key_down(keys, eadk_key_comma)) { PUSHCHAR('E') };
-      if (eadk_keyboard_key_down(keys, eadk_key_power)) { PUSHCHAR('F') };
-    }
-
-    
-    eadk_display_draw_string("bp addr", (eadk_point_t){100, 90}, false, eadk_color_white, eadk_color_black);
-    eadk_display_draw_string(input, (eadk_point_t){100, 115}, false, eadk_color_white, eadk_color_black);
-
-  }
-}
-
-void emu_loop(Emu* emu) {
-  bool quitting = false;
-  bool vram = false;
-  eadk_keyboard_state_t keys;
-  int offs = 0;
-  
-  while (!quitting) { 
-    while (1) {
-      keys = eadk_keyboard_scan();
-      if (eadk_keyboard_key_down(keys, eadk_key_down)) offs += 8;
-      if (eadk_keyboard_key_down(keys, eadk_key_up) && offs >= 16) offs -= 8;
-      if (eadk_keyboard_key_down(keys, eadk_key_right)) offs += 32;
-      if (eadk_keyboard_key_down(keys, eadk_key_left) && offs >= 32) offs -= 32;
-      if (eadk_keyboard_key_down(keys, eadk_key_ok)) break;
-      if (eadk_keyboard_key_down(keys, eadk_key_var)) { vram = !vram; eadk_timing_msleep(500); }
-      if (eadk_keyboard_key_down(keys, eadk_key_shift)) offs = emu->cpu.SP;
-      if (eadk_keyboard_key_down(keys, eadk_key_alpha)) offs = emu->cpu.PC;
-      if (eadk_keyboard_key_down(keys, eadk_key_exp)) {
-        int addr = get_breakpoint();
-        if (addr != -1) {
-          while (emu->cpu.PC != addr) step(emu);
-        }
-        eadk_timing_millis(500);
-        continue;
-      }
-      char message[512];
-      Registers *main = &emu->cpu.main;
-      Registers *alt = &emu->cpu.alt;
-      sprintf(message, "PC=%04x   %s\nA=%02x F=%02x\tA'=%02x F'=%02x\nB=%02x C=%02x\tB'=%02x C'=%02x\nD=%02x E=%02x\tD'=%02x E'=%02x\nH=%02x L=%02x\tH'=%02x L'=%02x\nIX=%04x\tIY=%04x \nSP=%04x\tI=%02x R=%02x \n", emu->cpu.PC, get_inst(emu), main->singles.A, *(u8*)&main->singles.F, alt->singles.A, *(u8*)&alt->singles.F, 
-                  main->singles.B, main->singles.C, alt->singles.B, alt->singles.C, 
-                  main->singles.D, main->singles.E, alt->singles.D, alt->singles.E, 
-                  main->singles.H, main->singles.L, alt->singles.H, alt->singles.L, 
-                  emu->cpu.IX, emu->cpu.IY, emu->cpu.SP, emu->cpu.I, emu->cpu.R );
-      eadk_display_draw_string(message, (eadk_point_t){0, 0}, false, eadk_color_black, eadk_color_white);
-
-      char hexdump[256];
-      char tmp[16];
-      for (int i = 0; i < 10; i++) {
-        u16 curOffs = offs + i*8;
-        sprintf(hexdump, "%04x: ", curOffs);
-        for (int j = 0; j < 8; j++) {
-          u8 x = read_u8(j + offs + i*8);
-          if (vram) x = emu->vdp.vram[j + offs + i*8];
-          sprintf(tmp, "%02x ", x);
-          strcat(hexdump, tmp);
-        }
-        
-        strcat(hexdump, "  ");
-        for (int j = 0; j < 8; j++) {
-          char a = read_u8(j + offs + i*8);
-          if (vram) a = emu->vdp.vram[j + offs + i*8];
-          if (a < 0x20) a = '.';
-          if (a > 125) a = '.';
-          sprintf(tmp, "%c", a);
-          strcat(hexdump, tmp);
-        }
-        eadk_display_draw_string(hexdump, (eadk_point_t){0, 100 + 14*i}, false, eadk_color_black, eadk_color_white);
-      }
-      
-    }
-    step(emu);
-    eadk_timing_msleep(500);
-  }
-}
-#else 
-
+#ifndef TARGET_LINUX
 u8 get_input() {
   u8 current_keys = 0;
-  #ifndef TARGET_LINUX
   eadk_keyboard_state_t keyboardState = eadk_keyboard_scan();
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_up);
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_down) << 1;
@@ -188,16 +52,9 @@ u8 get_input() {
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
-  #else
-  current_keys |= IsKeyDown(KEY_UP);
-  current_keys |= IsKeyDown(KEY_DOWN) << 1;
-  current_keys |= IsKeyDown(KEY_LEFT) << 2;
-  current_keys |= IsKeyDown(KEY_RIGHT) << 3;
-  current_keys |= IsKeyDown(KEY_W) << 4;
-  current_keys |= IsKeyDown(KEY_X) << 5;
-  #endif
-  return ~current_keys;
+  return ~current_keys
 }
+
 
 void emu_loop(Emu* emu) {
   bool quitting = false;
@@ -207,22 +64,80 @@ void emu_loop(Emu* emu) {
     int currentFrameTicks = 0;
     
     set_input(get_input());
-    bool deb = false;
-    int target = 0x43;
     while (currentFrameTicks < ticksPerFrame) {
       currentFrameTicks += step(emu);
     }
-    #ifdef TARGET_LINUX
-    quitting = WindowShouldClose();
-    #else
     quitting = eadk_keyboard_key_down(eadk_keyboard_scan(), eadk_key_back);
-    #endif  
+    frame++;
+  }
+}
+#else
+u8 get_input() {
+  u8 current_keys = 0;
+  current_keys |= IsKeyDown(KEY_UP);
+  current_keys |= IsKeyDown(KEY_DOWN) << 1;
+  current_keys |= IsKeyDown(KEY_LEFT) << 2;
+  current_keys |= IsKeyDown(KEY_RIGHT) << 3;
+  current_keys |= IsKeyDown(KEY_W) << 4;
+  current_keys |= IsKeyDown(KEY_X) << 5;
+  return ~current_keys;
+}
+
+
+void draw_instruction_panel() {
+  // décoder les instructions jusqu'à arriver à la position indiquée par  le scroll
+  // a partir de là, enchainer les drawtext pour dessiner ttes les instructions
+  // on peut utiliser le scissors au pire
+  
+}
+
+void emu_loop(Emu* emu) {
+  bool quitting = false;
+  int frame = 0;
+  const float ticksPerFrame = 10738580 / 60;
+  InitWindow(950, 600, "master-nw");
+
+  Image screen = {
+      .data = emu->vdp.framebuffer,
+      .width = 256,
+      .height = 192,
+      .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+      .mipmaps = 1
+    };
+  Texture2D screenTex = LoadTextureFromImage(screen);
+
+  bool textBoxSeekEditMode = false;
+  char textBoxSeekText[128] = "0000";
+  Rectangle instructionListScrollView = { 0, 0, 0, 0 };
+  Vector2 instructionListScrollOffset = { 0, 0 };
+  Vector2 instructionListBoundsOffset = { 0, 0 };
+
+  while (!quitting) {
+    int currentFrameTicks = 0;
+    
+    set_input(get_input());
+    while (currentFrameTicks < ticksPerFrame) {
+      currentFrameTicks += step(emu);
+    }
+    UpdateTexture(screenTex, emu->vdp.framebuffer);
+
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    DrawFPS(256, 0);
+
+    GuiGroupBox((Rectangle){ 600, 50, 300, 500 }, "INSTRUCTIONS");
+    if (GuiTextBox((Rectangle){ 760, 70, 120, 24 }, textBoxSeekText, 128, textBoxSeekEditMode)) textBoxSeekEditMode = !textBoxSeekEditMode;
+    GuiLabel((Rectangle){ 620, 70, 120, 24 }, "SEEK");
+    GuiScrollPanel((Rectangle){ 620, 110, 260 - instructionListBoundsOffset.x, 392 - instructionListBoundsOffset.y }, NULL, (Rectangle){ 620, 110, 260, 500 }, &instructionListScrollOffset, &instructionListScrollView);
+    GuiPanel((Rectangle){ 50, 50, 514, 386 }, NULL);
+
+    DrawTextureEx(screenTex, (Vector2){51, 51},0, 2.0f, (Color){255,255,255,255});
+
+
+    EndDrawing();
+
+    quitting = WindowShouldClose();
     frame++;
   }
 }
 #endif
-
-
-void check_interrupts(Emu* emu) {
-  
-}

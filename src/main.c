@@ -18,13 +18,12 @@ int main(int argc, char * argv[]) {
   eadk_display_push_rect_uniform((eadk_rect_t){0, 0, 320, 240}, eadk_color_white);
   #else
   
-  InitWindow(512, 384, "master-nw");
-  SetTargetFPS(60);
+  
   FILE *file = fopen(argv[1], "rb");
   fseek(file, 0, SEEK_END);
 	unsigned long len = ftell(file);
 	fseek(file, 0, SEEK_SET);
-  printf("len=%x\n", len);
+  printf("len=%lux\n", len);
   rom=(char *)malloc(len+1);
   fread(rom, len, 1, file);
 	fclose(file);

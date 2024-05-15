@@ -1,11 +1,11 @@
 #include "tester.h"
 #include <string.h>
 #include "cpu.h"
-#define RED   "\x1B[31m"
-#define GRN   "\x1B[32m"
-#define YEL   "\x1B[33m"
-#define BLU   "\x1B[34m"
-#define RESET "\x1B[0m"
+#define DBG_RED   "\x1B[31m"
+#define DBG_GRN   "\x1B[32m"
+#define DBG_YEL   "\x1B[33m"
+#define DBG_BLU   "\x1B[34m"
+#define DBG_RESET "\x1B[0m"
 
 void unit_test(Emu *emu, char *filename)
 {
@@ -29,7 +29,7 @@ void unit_test(Emu *emu, char *filename)
 
 char *bool_to_string(bool val)
 {
-    return val ? GRN "OK" RESET : RED "NO" RESET;
+    return val ? DBG_GRN "OK" DBG_RESET : DBG_RED "NO" DBG_RESET;
 }
 
 void test_case(Emu *emu, FILE *f)
@@ -76,65 +76,65 @@ void test_case(Emu *emu, FILE *f)
     bool halted = false;
     execute_cpu(&halted);
 
-    sprintf(message, "PC:\t%s%d\t%s%d%s\n", RED, emu->cpu.PC, GRN, final.pc, RESET);
+    sprintf(message, "PC:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.PC, DBG_GRN, final.pc, DBG_RESET);
     if (emu->cpu.PC != final.pc)
         strcat(cpu_message, message);
 
-    sprintf(message, "SP:\t%s%d\t%s%d%s\n", RED, emu->cpu.SP, GRN, final.sp, RESET);
+    sprintf(message, "SP:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.SP, DBG_GRN, final.sp, DBG_RESET);
     if (emu->cpu.SP != final.sp) strcat(cpu_message, message);
 
-    sprintf(message, "A:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.A, GRN, final.a, RESET);
+    sprintf(message, "A:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.A, DBG_GRN, final.a, DBG_RESET);
     if (emu->cpu.main.singles.A != final.a) strcat(cpu_message, message);
 
-    sprintf(message, "B:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.B, GRN, final.b, RESET);
+    sprintf(message, "B:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.B, DBG_GRN, final.b, DBG_RESET);
     if (emu->cpu.main.singles.B != final.b) strcat(cpu_message, message);
 
-    sprintf(message, "C:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.C, GRN, final.c, RESET);
+    sprintf(message, "C:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.C, DBG_GRN, final.c, DBG_RESET);
     if (emu->cpu.main.singles.C != final.c) strcat(cpu_message, message);
 
-    sprintf(message, "D:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.D, GRN, final.d, RESET);
+    sprintf(message, "D:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.D, DBG_GRN, final.d, DBG_RESET);
     if (emu->cpu.main.singles.D != final.d) strcat(cpu_message, message);
     
-    sprintf(message, "E:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.E, GRN, final.e, RESET);
+    sprintf(message, "E:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.E, DBG_GRN, final.e, DBG_RESET);
     if (emu->cpu.main.singles.E != final.e) strcat(cpu_message, message);
 
-    sprintf(message, "F:\t%s%d\t%s%d%s\n", RED, *(u8*)&emu->cpu.main.singles.F, GRN, final.f, RESET);
+    sprintf(message, "F:\t%s%d\t%s%d%s\n", DBG_RED, *(u8*)&emu->cpu.main.singles.F, DBG_GRN, final.f, DBG_RESET);
     if (*(u8*)&emu->cpu.main.singles.F != final.f) strcat(cpu_message, message);
 
-    sprintf(message, "H:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.H, GRN, final.h, RESET);
+    sprintf(message, "H:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.H, DBG_GRN, final.h, DBG_RESET);
     if (emu->cpu.main.singles.H != final.h) strcat(cpu_message, message);
 
-    sprintf(message, "L:\t%s%d\t%s%d%s\n", RED, emu->cpu.main.singles.L, GRN, final.l, RESET);
+    sprintf(message, "L:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.main.singles.L, DBG_GRN, final.l, DBG_RESET);
     if (emu->cpu.main.singles.L != final.l) strcat(cpu_message, message);
 
-    sprintf(message, "I:\t%s%d\t%s%d%s\n", RED, emu->cpu.I, GRN, final.i, RESET);
+    sprintf(message, "I:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.I, DBG_GRN, final.i, DBG_RESET);
     if (emu->cpu.I != final.i) strcat(cpu_message, message);
 
-    sprintf(message, "R:\t%s%d\t%s%d%s\n", RED, emu->cpu.R, GRN, final.r, RESET);
+    sprintf(message, "R:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.R, DBG_GRN, final.r, DBG_RESET);
     if (emu->cpu.R != final.r) strcat(cpu_message, message);
 
-    sprintf(message, "IX:\t%s%d\t%s%d%s\n", RED, emu->cpu.IX, GRN, final.ix, RESET);
+    sprintf(message, "IX:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.IX, DBG_GRN, final.ix, DBG_RESET);
     if (emu->cpu.IX != final.ix) strcat(cpu_message, message);
 
-    sprintf(message, "IY:\t%s%d\t%s%d%s\n", RED, emu->cpu.IY, GRN, final.iy, RESET);
+    sprintf(message, "IY:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.IY, DBG_GRN, final.iy, DBG_RESET);
     if (emu->cpu.IY != final.iy) strcat(cpu_message, message);
 
-    sprintf(message, "AF_:\t%s%d\t%s%d%s\n", RED, emu->cpu.alt.pairs.AF, GRN, final.af_, RESET);
+    sprintf(message, "AF_:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.alt.pairs.AF, DBG_GRN, final.af_, DBG_RESET);
     if (emu->cpu.alt.pairs.AF != final.af_) strcat(cpu_message, message);
 
-    sprintf(message, "BC_:\t%s%d\t%s%d%s\n", RED, emu->cpu.alt.pairs.BC, GRN, final.bc_, RESET);
+    sprintf(message, "BC_:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.alt.pairs.BC, DBG_GRN, final.bc_, DBG_RESET);
     if (emu->cpu.alt.pairs.BC != final.bc_) strcat(cpu_message, message);
 
-    sprintf(message, "DE_:\t%s%d\t%s%d%s\n", RED, emu->cpu.alt.pairs.DE, GRN, final.de_, RESET);
+    sprintf(message, "DE_:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.alt.pairs.DE, DBG_GRN, final.de_, DBG_RESET);
     if (emu->cpu.alt.pairs.DE != final.de_) strcat(cpu_message, message);
 
-    sprintf(message, "HL_:\t%s%d\t%s%d%s\n", RED, emu->cpu.alt.pairs.HL, GRN, final.hl_, RESET);
+    sprintf(message, "HL_:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.alt.pairs.HL, DBG_GRN, final.hl_, DBG_RESET);
     if (emu->cpu.alt.pairs.HL != final.hl_) strcat(cpu_message, message);
 
-    sprintf(message, "IFF1:\t%s%d\t%s%d%s\n", RED, emu->cpu.FF1, GRN, final.iff1, RESET);
+    sprintf(message, "IFF1:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.FF1, DBG_GRN, final.iff1, DBG_RESET);
     if (emu->cpu.FF1 != final.iff1) strcat(cpu_message, message);
 
-    sprintf(message, "IFF2:\t%s%d\t%s%d%s\n", RED, emu->cpu.FF2, GRN, final.iff2, RESET);
+    sprintf(message, "IFF2:\t%s%d\t%s%d%s\n", DBG_RED, emu->cpu.FF2, DBG_GRN, final.iff2, DBG_RESET);
     if (emu->cpu.FF2 != final.iff2) strcat(cpu_message, message);
 
     char ram_message[1024];
@@ -144,17 +144,17 @@ void test_case(Emu *emu, FILE *f)
     {
         fread(&address, 2, 1, f);
         fread(&data, 1, 1, f);
-        sprintf(message, "RAM %d:\t%s%d\t%s%d%s\n", address, RED, emu->mem.internal_memory[address], GRN, data, RESET);
+        sprintf(message, "RAM %d:\t%s%d\t%s%d%s\n", address, DBG_RED, emu->mem.internal_memory[address], DBG_GRN, data, DBG_RESET);
         if (emu->mem.internal_memory[address] != data) strcat(ram_message, message);
     }
     
     if (strlen(cpu_message) || strlen(ram_message))
     {
-        printf(RED "NOT OK\n" RESET);
+        printf(DBG_RED "NOT OK\n" DBG_RESET);
         printf("%s", cpu_message);
         printf("%s", ram_message);
         getchar();
     }
     else
-        printf(GRN "OK\n" RESET);
+        printf(DBG_GRN "OK\n" DBG_RESET);
 }

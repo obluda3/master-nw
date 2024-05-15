@@ -2102,7 +2102,6 @@ u8 execute_bitwise(u8 inst, u8 input) {
 }
 u8* get_register(u8 inst) {
   u8 regNum = inst & 7;
-  u8 input;
   switch (regNum) {
     case 0: return &cpu->main.singles.B;
     case 1: return &cpu->main.singles.C;
