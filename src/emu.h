@@ -3,9 +3,12 @@
 #include "mem.h"
 #include "vdp.h"
 
-typedef union {
-  struct {
-    struct { 
+typedef union
+{
+  struct
+  {
+    struct
+    {
       bool c : 1;
       bool n : 1;
       bool pv : 1;
@@ -23,7 +26,8 @@ typedef union {
     u8 L;
     u8 H;
   } singles;
-  struct {
+  struct
+  {
     u16 AF;
     u16 BC;
     u16 DE;
@@ -31,7 +35,8 @@ typedef union {
   } pairs;
 } Registers;
 
-typedef struct {
+typedef struct
+{
   Registers main;
   Registers alt;
   u16 IX;
@@ -44,12 +49,13 @@ typedef struct {
   bool FF2;
 } Z80;
 
-typedef struct {
+typedef struct
+{
   Z80 cpu;
   Memory mem;
   VDP vdp;
 } Emu;
 
-void emu_loop(Emu* emu);
+void emu_loop(Emu *emu);
 void pause();
-void check_interrupts(Emu* emu);
+void check_interrupts(Emu *emu);

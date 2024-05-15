@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include "emu.h"
 
-typedef struct {
+typedef struct
+{
     u16 pc;
     u16 sp;
     u8 a;
@@ -25,8 +26,8 @@ typedef struct {
     u16 iff2;
 } state_t;
 
-void unit_test(Emu* emu, char* filename);
+void unit_test(Emu *emu, char *filename);
 
-void test_case(Emu* emu, FILE* f);
-bool check_state(FILE* f);
-void set_state(FILE* f);
+void test_case(Emu *emu, FILE *f);
+bool check_state(FILE *f);
+void set_state(FILE *f);
