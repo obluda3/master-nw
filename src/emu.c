@@ -1,6 +1,6 @@
 #include "emu.h"
 #include "cpu.h"
-#include "time.h"
+#include <time.h>
 #include <stdio.h>
 #include "io.h"
 #include <stdlib.h>
@@ -10,6 +10,8 @@
 
 #define RAYGUI_IMPLEMENTATION
 #include <raygui.h>
+#undef RAYGUI_IMPLEMENTATION
+#include <style_cyber.h>
 
 bool halted = false;
 void handle_interrupts(Emu *emu, bool reset)
@@ -112,7 +114,8 @@ void emu_loop(Emu *emu)
   int frame = 0;
   const float ticksPerFrame = 10738580 / 60;
   InitWindow(950, 600, "master-nw");
-
+  SetTargetFPS(200);
+  GuiLoadStyleCyber();
   Image screen = {
       .data = emu->vdp.framebuffer,
       .width = 256,
@@ -134,7 +137,7 @@ void emu_loop(Emu *emu)
   char regSPText[128] = "";
   char regPCText[128] = "";
 
-  bool paused = true;
+  bool paused = false;
   Rectangle ScrollPanel027ScrollView = {0, 0, 0, 0};
   Vector2 ScrollPanel027ScrollOffset = {0, 0};
   Vector2 ScrollPanel027BoundsOffset = {0, 0};
@@ -181,23 +184,19 @@ void emu_loop(Emu *emu)
       while (currentFrameTicks < ticksPerFrame)
       {
         currentFrameTicks += step(emu);
-        if (emu->cpu.PC == 0x38) {
-          break;
-          paused = true;
-        }
       }
       UpdateTexture(screenTex, emu->vdp.framebuffer);
       frame++;
     }
 
     
-
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    DrawFPS(256, 0);
 
+    GuiPanel((Rectangle){-1, -1, 952, 602}, NULL);
     GuiGroupBox((Rectangle){600, 50, 320, 500}, "INSTRUCTIONS");
     GuiPanel((Rectangle){50, 50, 514, 386}, NULL);
+    GuiGroupBox((Rectangle){50, 448, 514, 100}, "CONTROL");
 
     GuiLabel((Rectangle){648, 66, 48, 22}, regAFText);
     GuiLabel((Rectangle){648, 98, 48, 22}, regBCText);
@@ -223,19 +222,17 @@ void emu_loop(Emu *emu)
     GuiLabel((Rectangle){824, 98, 56, 22}, "IY");
     GuiLabel((Rectangle){824, 130, 56, 22}, "SP");
     GuiLabel((Rectangle){824, 162, 56, 22}, "PC");
-    GuiLabel((Rectangle){616, 210, 120, 24}, "INSTRUCTIONS");
-    GuiGroupBox((Rectangle){48, 448, 512, 100}, "CONTROL");
 
-    buttonPausePressed = GuiButton((Rectangle){72, 488, 120, 24}, "PAUSE");
+    buttonPausePressed = GuiButton((Rectangle){72, 476, 120, 24}, "PAUSE");
     if (buttonPausePressed) 
     {
       paused = true;
     }
-    if (GuiButton((Rectangle){240, 488, 120, 24}, "RESUME")) 
+    if (GuiButton((Rectangle){240, 476, 120, 24}, "RESUME")) 
     {
       paused = false;
     }
-    buttonStepPressed = GuiButton((Rectangle){408, 488, 120, 24}, "STEP");
+    buttonStepPressed = GuiButton((Rectangle){408, 476, 120, 24}, "STEP");
 
     if (GuiButton((Rectangle){240, 512, 120, 24}, "dump"))
       mem_dump(emu);
@@ -243,9 +240,8 @@ void emu_loop(Emu *emu)
     
 
     DrawTextureEx(screenTex, (Vector2){51, 51}, 0, 2.0f, (Color){255, 255, 255, 255});
-
+    DrawFPS(0,0);
     EndDrawing();
-
     quitting = WindowShouldClose();
   }
 }
