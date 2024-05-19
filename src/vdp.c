@@ -287,6 +287,7 @@ bool vdp_is_interrupt()
 {
   bool a = vdp->lineInterrupt && get_bit(vdp->registers[0], 4);
   bool b = vdp->frameInterrupt && get_bit(vdp->registers[1], 5);
+
   return a || b;
 }
 
@@ -414,7 +415,7 @@ void vdp_update(float vdpcycles)
 
     if (realVcounter == 192)
     {
-      vdp->statusReg = vdp->statusReg | 0x80;
+      vdp->statusReg |= 0x80;
       vdp->frameInterrupt = true;
     }
 

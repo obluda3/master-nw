@@ -7,7 +7,6 @@
 #include "vdp.h"
 #include "platform.h"
 #include <string.h>
-#include "inst.h"
 
 #define RAYGUI_IMPLEMENTATION
 #include <raygui.h>
@@ -34,6 +33,8 @@ void handle_interrupts(Emu *emu, bool reset)
       pc += 1;
     write_u16(emu->cpu.SP, pc);
     emu->cpu.PC = 0x38;
+    emu->cpu.FF1 = false;
+    emu->cpu.FF2 = false;
     halted = false;
   }
 }
@@ -93,11 +94,16 @@ u8 get_input()
   return ~current_keys;
 }
 
-void draw_instruction_panel()
+void mem_dump()
 {
-  // décoder les instructions jusqu'à arriver à la position indiquée par  le scroll
-  // a partir de là, enchainer les drawtext pour dessiner ttes les instructions
-  // on peut utiliser le scissors au pire
+  FILE *file = fopen("mem.bin", "wb");
+
+  char memory[0x10000];
+  for (int i = 0; i < 0x10000; i++)
+    memory[i] = read_u8(i);
+
+  fwrite(memory, 0x4000, 4, file);
+  fclose(file);
 }
 
 void emu_loop(Emu *emu)
@@ -115,48 +121,76 @@ void emu_loop(Emu *emu)
       .mipmaps = 1};
   Texture2D screenTex = LoadTextureFromImage(screen);
 
-  bool textBoxRegAFEditMode = false;
-  char textBoxRegAFText[128] = "";
-  bool textBoxRegBCEditMode = false;
-  char textBoxRegBCText[128] = "";
-  bool textBoxRegDEEditMode = false;
-  char textBoxRegDEText[128] = "";
-  bool textBoxRegHLEditMode = false;
-  char textBoxRegHLText[128] = "";
-  bool textBoxRegAF2EditMode = false;
-  char textBoxRegAF2Text[128] = "";
-  bool textBoxRegBC2EditMode = false;
-  char textBoxRegBC2Text[128] = "";
-  bool textBoxRegDE2EditMode = false;
-  char textBoxRegDE2Text[128] = "";
-  bool textBoxRegHL2EditMode = false;
-  char textBoxRegHL2Text[128] = "";
-  bool textBoxRegIXEditMode = false;
-  char textBoxRegIXText[128] = "";
-  bool textBoxRegIYEditMode = false;
-  char textBoxRegIYText[128] = "";
-  bool textBoxRegSPEditMode = false;
-  char textBoxRegSPText[128] = "";
-  bool textBoxRegPCEditMode = false;
-  char textBoxRegPCText[128] = "";
+  char regAFText[128] = "";
+  char regBCText[128] = "";
+  char regDEText[128] = "";
+  char regHLText[128] = "";
+  char regAF2Text[128] = "";
+  char regBC2Text[128] = "";
+  char regDE2Text[128] = "";
+  char regHL2Text[128] = "";
+  char regIXText[128] = "";
+  char regIYText[128] = "";
+  char regSPText[128] = "";
+  char regPCText[128] = "";
+
+  bool paused = true;
   Rectangle ScrollPanel027ScrollView = {0, 0, 0, 0};
   Vector2 ScrollPanel027ScrollOffset = {0, 0};
   Vector2 ScrollPanel027BoundsOffset = {0, 0};
-  bool buttonPausePressed = false;
-  bool buttonResumePressed = false;
   bool buttonStepPressed = false;
+  bool buttonPausePressed = false;
 
-  bool paused = false;
+  int currentFrameTicks = 0;
   while (!quitting)
   {
-    int currentFrameTicks = 0;
-
-    set_input(get_input());
-    while (currentFrameTicks < ticksPerFrame)
+    if (paused) 
     {
-      currentFrameTicks += step(emu);
+      if (buttonStepPressed) 
+      {
+        currentFrameTicks += step(emu);
+        if (currentFrameTicks >= ticksPerFrame) 
+        {
+          frame++;
+          currentFrameTicks = 0;
+          UpdateTexture(screenTex, emu->vdp.framebuffer);
+        }
+      }
+      if (buttonStepPressed || buttonPausePressed) 
+      {
+        sprintf(regAFText, "%04X", emu->cpu.main.pairs.AF);
+        sprintf(regBCText, "%04X", emu->cpu.main.pairs.BC);
+        sprintf(regDEText, "%04X", emu->cpu.main.pairs.DE);
+        sprintf(regHLText, "%04X", emu->cpu.main.pairs.HL);
+
+        sprintf(regAF2Text, "%04X", emu->cpu.alt.pairs.AF);
+        sprintf(regBC2Text, "%04X", emu->cpu.alt.pairs.BC);
+        sprintf(regDE2Text, "%04X", emu->cpu.alt.pairs.DE);
+        sprintf(regHL2Text, "%04X", emu->cpu.alt.pairs.HL);
+
+        sprintf(regSPText, "%04X", emu->cpu.SP);
+        sprintf(regPCText, "%04X", emu->cpu.PC);
+        sprintf(regIXText, "%04X", emu->cpu.IX);
+        sprintf(regIYText, "%04X", emu->cpu.IY);
+      }
     }
-    UpdateTexture(screenTex, emu->vdp.framebuffer);
+    else if (!paused)
+    {
+      currentFrameTicks = 0;
+      set_input(get_input());
+      while (currentFrameTicks < ticksPerFrame)
+      {
+        currentFrameTicks += step(emu);
+        if (emu->cpu.PC == 0x38) {
+          break;
+          paused = true;
+        }
+      }
+      UpdateTexture(screenTex, emu->vdp.framebuffer);
+      frame++;
+    }
+
+    
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
@@ -164,30 +198,19 @@ void emu_loop(Emu *emu)
 
     GuiGroupBox((Rectangle){600, 50, 320, 500}, "INSTRUCTIONS");
     GuiPanel((Rectangle){50, 50, 514, 386}, NULL);
-    if (GuiTextBox((Rectangle){648, 66, 48, 22}, textBoxRegAFText, 128, textBoxRegAFEditMode))
-      textBoxRegAFEditMode = !textBoxRegAFEditMode;
-    if (GuiTextBox((Rectangle){648, 98, 48, 22}, textBoxRegBCText, 128, textBoxRegBCEditMode))
-      textBoxRegBCEditMode = !textBoxRegBCEditMode;
-    if (GuiTextBox((Rectangle){648, 130, 48, 22}, textBoxRegDEText, 128, textBoxRegDEEditMode))
-      textBoxRegDEEditMode = !textBoxRegDEEditMode;
-    if (GuiTextBox((Rectangle){648, 162, 48, 22}, textBoxRegHLText, 128, textBoxRegHLEditMode))
-      textBoxRegHLEditMode = !textBoxRegHLEditMode;
-    if (GuiTextBox((Rectangle){752, 66, 48, 22}, textBoxRegAF2Text, 128, textBoxRegAF2EditMode))
-      textBoxRegAF2EditMode = !textBoxRegAF2EditMode;
-    if (GuiTextBox((Rectangle){752, 98, 48, 22}, textBoxRegBC2Text, 128, textBoxRegBC2EditMode))
-      textBoxRegBC2EditMode = !textBoxRegBC2EditMode;
-    if (GuiTextBox((Rectangle){752, 130, 48, 22}, textBoxRegDE2Text, 128, textBoxRegDE2EditMode))
-      textBoxRegDE2EditMode = !textBoxRegDE2EditMode;
-    if (GuiTextBox((Rectangle){752, 162, 48, 22}, textBoxRegHL2Text, 128, textBoxRegHL2EditMode))
-      textBoxRegHL2EditMode = !textBoxRegHL2EditMode;
-    if (GuiTextBox((Rectangle){856, 66, 48, 22}, textBoxRegIXText, 128, textBoxRegIXEditMode))
-      textBoxRegIXEditMode = !textBoxRegIXEditMode;
-    if (GuiTextBox((Rectangle){856, 98, 48, 22}, textBoxRegIYText, 128, textBoxRegIYEditMode))
-      textBoxRegIYEditMode = !textBoxRegIYEditMode;
-    if (GuiTextBox((Rectangle){856, 130, 48, 22}, textBoxRegSPText, 128, textBoxRegSPEditMode))
-      textBoxRegSPEditMode = !textBoxRegSPEditMode;
-    if (GuiTextBox((Rectangle){856, 162, 48, 22}, textBoxRegPCText, 128, textBoxRegPCEditMode))
-      textBoxRegPCEditMode = !textBoxRegPCEditMode;
+
+    GuiLabel((Rectangle){648, 66, 48, 22}, regAFText);
+    GuiLabel((Rectangle){648, 98, 48, 22}, regBCText);
+    GuiLabel((Rectangle){648, 130, 48, 22}, regDEText);
+    GuiLabel((Rectangle){648, 162, 48, 22}, regHLText);
+    GuiLabel((Rectangle){752, 66, 48, 22}, regAF2Text);
+    GuiLabel((Rectangle){752, 98, 48, 22}, regBC2Text);
+    GuiLabel((Rectangle){752, 130, 48, 22}, regDE2Text);
+    GuiLabel((Rectangle){752, 162, 48, 22}, regHL2Text);
+    GuiLabel((Rectangle){856, 66, 48, 22}, regIXText);
+    GuiLabel((Rectangle){856, 98, 48, 22}, regIYText);
+    GuiLabel((Rectangle){856, 130, 48, 22}, regSPText);
+    GuiLabel((Rectangle){856, 162, 48, 22}, regPCText);
     GuiLabel((Rectangle){616, 66, 56, 22}, "AF");
     GuiLabel((Rectangle){616, 98, 56, 22}, "BC");
     GuiLabel((Rectangle){616, 130, 56, 22}, "DE");
@@ -200,19 +223,30 @@ void emu_loop(Emu *emu)
     GuiLabel((Rectangle){824, 98, 56, 22}, "IY");
     GuiLabel((Rectangle){824, 130, 56, 22}, "SP");
     GuiLabel((Rectangle){824, 162, 56, 22}, "PC");
-    GuiLabel((Rectangle){616, 210, 120, 24}, "MEMORY");
-    GuiScrollPanel((Rectangle){616, 234, 288 - ScrollPanel027BoundsOffset.x, 302 - ScrollPanel027BoundsOffset.y}, NULL, (Rectangle){616, 234, 288, 302}, &ScrollPanel027ScrollOffset, &ScrollPanel027ScrollView);
+    GuiLabel((Rectangle){616, 210, 120, 24}, "INSTRUCTIONS");
     GuiGroupBox((Rectangle){48, 448, 512, 100}, "CONTROL");
+
     buttonPausePressed = GuiButton((Rectangle){72, 488, 120, 24}, "PAUSE");
-    buttonResumePressed = GuiButton((Rectangle){240, 488, 120, 24}, "RESUME");
+    if (buttonPausePressed) 
+    {
+      paused = true;
+    }
+    if (GuiButton((Rectangle){240, 488, 120, 24}, "RESUME")) 
+    {
+      paused = false;
+    }
     buttonStepPressed = GuiButton((Rectangle){408, 488, 120, 24}, "STEP");
+
+    if (GuiButton((Rectangle){240, 512, 120, 24}, "dump"))
+      mem_dump(emu);
+
+    
 
     DrawTextureEx(screenTex, (Vector2){51, 51}, 0, 2.0f, (Color){255, 255, 255, 255});
 
     EndDrawing();
 
     quitting = WindowShouldClose();
-    frame++;
   }
 }
 #endif
