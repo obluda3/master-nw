@@ -325,7 +325,7 @@ void process_line()
     {
       int paletteIndex = (get_bit(b1, 7 - x) << 3) + (get_bit(b2, 7 - x) << 2) + (get_bit(b3, 7 - x) << 1) + get_bit(b4, 7 - x);
       u8 clr = get_color(paletteIndex, paletteSelect);
-
+      
       lineState[col * 8 + x] = priorityFlag * 2;
       lineBuffer[col * 8 + x] = clr;
     }
@@ -366,6 +366,8 @@ void process_line()
       if (lineState[spriteX + x] == 2)
         continue;
       int paletteIndex = (get_bit(b1, 7 - x) << 3) + (get_bit(b2, 7 - x) << 2) + (get_bit(b3, 7 - x) << 1) + get_bit(b4, 7 - x);
+      if (paletteIndex == 0)
+        continue;
       u8 clr = get_color(paletteIndex, true);
 
       lineState[spriteX + x] = 1;
