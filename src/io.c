@@ -50,6 +50,8 @@ void write_io(u16 addr, u8 value)
     break;
   case 0xFD:
     break;
+  case 0x7f:
+    break;
   default:
     printf("Unimplemented IO Write Port %x\n", addr);
     break;
