@@ -306,8 +306,14 @@ void process_line()
   u16 *nameTable = (u16 *)&vdp->vram[addr];
   int line = y / 8;
   int yInLine = y % 8;
-  for (int col = 0; col < 32; col++)
+
+  int startingColumn = (32 - (vdp->registers[8] >> 3)) % 32;
+  int fineScroll = vdp->registers[8] & 7;
+  bool debug = IsKeyPressed(KEY_SPACE);
+
+  for (int i = 0; i < 32; i++)
   {
+    int col = (startingColumn + i) % 32;
     u16 tileInfo = nameTable[col + line * 32];
     u16 patternIndex = tileInfo & 0x1FF;
     bool priorityFlag = (tileInfo & 0x1000) != 0;
@@ -321,13 +327,16 @@ void process_line()
     u8 b3 = pixelsLine[1];
     u8 b4 = pixelsLine[0];
 
+    int xStart = i*8 + fineScroll;
+
     for (int x = 0; x < 8; x++)
     {
       int paletteIndex = (get_bit(b1, 7 - x) << 3) + (get_bit(b2, 7 - x) << 2) + (get_bit(b3, 7 - x) << 1) + get_bit(b4, 7 - x);
       u8 clr = get_color(paletteIndex, paletteSelect);
       
-      lineState[col * 8 + x] = priorityFlag * 2;
-      lineBuffer[col * 8 + x] = clr;
+      int xPos = (xStart + x) % 256;
+      lineState[xPos] = priorityFlag * 2;
+      lineBuffer[xPos] = clr;
     }
   }
 
@@ -374,6 +383,11 @@ void process_line()
       lineBuffer[spriteX + x] = clr;
     }
   }
+
+  // draw overscan
+  u8 clr = get_color(vdp->registers[7] & 0xF, true);
+  for (int i = 0; i < 8; i++)
+    lineBuffer[i] = clr;
   draw_line(y, lineBuffer);
 }
 
