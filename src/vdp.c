@@ -307,13 +307,13 @@ void process_line()
   int line = y / 8;
   int yInLine = y % 8;
 
-  int startingColumn = (32 - (vdp->registers[8] >> 3)) % 32;
-  int fineScroll = vdp->registers[8] & 7;
-  bool debug = IsKeyPressed(KEY_SPACE);
+  bool isHorizontalScrolling = !(get_bit(vdp->registers[0], 6) && y < 16);
+  int startingColumn = isHorizontalScrolling ? (32 - (vdp->registers[8] >> 3)) & 31 : 0;
+  int fineScroll = isHorizontalScrolling ? vdp->registers[8] & 7 : 0;
 
   for (int i = 0; i < 32; i++)
   {
-    int col = (startingColumn + i) % 32;
+    int col = (startingColumn + i) & 31;
     u16 tileInfo = nameTable[col + line * 32];
     u16 patternIndex = tileInfo & 0x1FF;
     bool priorityFlag = (tileInfo & 0x1000) != 0;
