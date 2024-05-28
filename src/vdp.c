@@ -304,13 +304,19 @@ void process_line()
   // render background
   u16 addr = get_name_table();
   u16 *nameTable = (u16 *)&vdp->vram[addr];
-  int line = y / 8;
-  int yInLine = y % 8;
+
+  int startingLine = vdp->registers[9] >> 3;
+  int scrollLine = vdp->registers[9] & 7;
+  
+  int line = (startingLine + (y/8)) % 28;
+  int yInLine = y & 7;
+  if (scrollLine + yInLine > 7)
+    line += 1;
+  yInLine = (yInLine + scrollLine) & 7; 
 
   bool isHorizontalScrolling = !(get_bit(vdp->registers[0], 6) && y < 16);
   int startingColumn = isHorizontalScrolling ? (32 - (vdp->registers[8] >> 3)) & 31 : 0;
-  int fineScroll = isHorizontalScrolling ? vdp->registers[8] & 7 : 0;
-
+  int scrollColumn = isHorizontalScrolling ? vdp->registers[8] & 7 : 0;
   for (int i = 0; i < 32; i++)
   {
     int col = (startingColumn + i) & 31;
@@ -327,7 +333,7 @@ void process_line()
     u8 b3 = pixelsLine[1];
     u8 b4 = pixelsLine[0];
 
-    int xStart = i*8 + fineScroll;
+    int xStart = i*8 + scrollColumn;
 
     for (int x = 0; x < 8; x++)
     {
@@ -342,6 +348,8 @@ void process_line()
 
   // render sprites
   u8 *satBase = &vdp->vram[get_sprite_address_table()];
+  bool isLargeSprite = get_bit(vdp->registers[1], 1);
+  int spriteHeight = 8 * (1+isLargeSprite);
   for (int i = 0; i < 64; i++)
   {
     if (satBase[i] == 0xD0)
@@ -355,7 +363,7 @@ void process_line()
     if (get_bit(vdp->registers[6], 2))
       patternIndex += 256;
 
-    if (!(y >= spriteY && y < spriteY + 8))
+    if (!(y >= spriteY && y < spriteY + spriteHeight))
       continue; // skip sprites that are not in scanline
 
     int lineInSprite = y - spriteY;
