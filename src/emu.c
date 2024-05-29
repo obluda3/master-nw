@@ -143,7 +143,7 @@ void emu_loop(Emu *emu)
   Vector2 ScrollPanel027BoundsOffset = {0, 0};
   bool buttonStepPressed = false;
   bool buttonPausePressed = false;
-
+  bool fastForward = false;
   int currentFrameTicks = 0;
   while (!quitting)
   {
@@ -187,6 +187,12 @@ void emu_loop(Emu *emu)
       }
       UpdateTexture(screenTex, emu->vdp.framebuffer);
       frame++;
+    }
+
+    if (IsKeyPressed(KEY_TAB)) {
+      fastForward = !fastForward;
+      int fps = fastForward ? 1000 : 200;
+      SetTargetFPS(fps);
     }
 
     
