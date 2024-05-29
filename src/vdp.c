@@ -298,7 +298,11 @@ void process_line()
     return;
   }
   int y = vdp->realVcounter;
+  // lineState = 0 if nothing has been drawn
+  // lineState = 1 if a sprite is drawn here
+  // lineState = 2 if a tile is drawn here
   u8 lineState[256] = {0};
+  
   u8 lineBuffer[256] = {0};
 
   // render background
@@ -308,10 +312,11 @@ void process_line()
   int startingLine = vdp->registers[9] >> 3;
   int scrollLine = vdp->registers[9] & 7;
   
-  int line = (startingLine + (y/8)) % 28;
+  int line = (startingLine + (y/8));
   int yInLine = y & 7;
   if (scrollLine + yInLine > 7)
     line += 1;
+  line = line % 28;
   yInLine = (yInLine + scrollLine) & 7; 
 
   bool isHorizontalScrolling = !(get_bit(vdp->registers[0], 6) && y < 16);
@@ -334,14 +339,13 @@ void process_line()
     u8 b4 = pixelsLine[0];
 
     int xStart = i*8 + scrollColumn;
-
     for (int x = 0; x < 8; x++)
     {
       int paletteIndex = (get_bit(b1, 7 - x) << 3) + (get_bit(b2, 7 - x) << 2) + (get_bit(b3, 7 - x) << 1) + get_bit(b4, 7 - x);
-      u8 clr = get_color(paletteIndex, paletteSelect);
       
+      u8 clr = get_color(paletteIndex, paletteSelect);
       int xPos = (xStart + x) % 256;
-      lineState[xPos] = priorityFlag * 2;
+      lineState[xPos] = priorityFlag * 2 * (paletteIndex != 0);
       lineBuffer[xPos] = clr;
     }
   }
@@ -354,6 +358,7 @@ void process_line()
   {
     if (satBase[i] == 0xD0)
       break;
+
     u8 spriteY = satBase[i] + 1;
     s16 spriteX = *(satBase + 128 + 2 * i);
     if (get_bit(vdp->registers[0], 3))
@@ -375,11 +380,13 @@ void process_line()
 
     for (int x = 0; x < 8; x++)
     {
+      // overlap sprite
       if (lineState[spriteX + x] == 1)
       {
         vdp->statusReg = vdp->statusReg | 16;
         continue;
       }
+      // priority Tile
       if (lineState[spriteX + x] == 2)
         continue;
       int paletteIndex = (get_bit(b1, 7 - x) << 3) + (get_bit(b2, 7 - x) << 2) + (get_bit(b3, 7 - x) << 1) + get_bit(b4, 7 - x);
