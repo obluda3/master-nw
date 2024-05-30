@@ -14,7 +14,6 @@ void init_mem(Memory *memory, const char *cartridge)
 {
   mem = memory;
   mem->cartridge_memory = (u8 *)cartridge;
-  memset(mem->internal_memory, 0, sizeof(mem->internal_memory));
 }
 
 void update_pages(u16 addr, u8 data)

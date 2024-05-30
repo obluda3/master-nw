@@ -19,7 +19,9 @@ ifeq ($(TARGET_ENV), linux)
 	CFLAGS = -std=c99
 	CFLAGS += -Wall
 	CFLAGS += -ggdb
+	CFLAGS += -O0
 	CFLAGS += -I$(LIB_FOLDER)
+	CFLAGS += -Ilib
 	CFLAGS += -DTARGET_LINUX
 	CFLAGS += -Wl,-rpath,$(LIB_BIN)
 	LDFLAGS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11 -lc
@@ -72,19 +74,19 @@ build: $(BUILD_DIR)/$(BUILD_TARGET) $(ICON_TARGET)
 check: $(BUILD_DIR)/app.bin
 
 # Run target
-run: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
+run: $(BUILD_DIR)/$(BUILD_TARGET) movethecharacter.sms
 	@echo "INSTALL $<"
-	$(Q) $(NWLINK) install-nwa --external-data rom.SMS $<
+	$(Q) $(NWLINK) install-nwa --external-data movethecharacter.sms $<
 
 # Binary target
-$(BUILD_DIR)/%.bin: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
+$(BUILD_DIR)/%.bin: $(BUILD_DIR)/$(BUILD_TARGET) movethecharacter.sms
 	@echo "BIN	 $@"
-	$(Q) $(NWLINK) nwa-bin --external-data rom.SMS $< $@
+	$(Q) $(NWLINK) nwa-bin --external-data movethecharacter.sms $< $@
 
 # ELF target
-$(BUILD_DIR)/%.elf: $(BUILD_DIR)/$(BUILD_TARGET) rom.SMS
+$(BUILD_DIR)/%.elf: $(BUILD_DIR)/$(BUILD_TARGET) movethecharacter.sms
 	@echo "ELF	 $@"
-	$(Q) $(NWLINK) nwa-elf --external-data rom.SMS $< $@
+	$(Q) $(NWLINK) nwa-elf --external-data movethecharacter.sms $< $@
 
 # NWA and Linux executable target
 $(BUILD_DIR)/app.nwa $(BUILD_DIR)/app_linux: $(OBJ) $(ICON_TARGET)

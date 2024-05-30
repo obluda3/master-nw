@@ -8,10 +8,6 @@
 #include "platform.h"
 #include <string.h>
 
-#define RAYGUI_IMPLEMENTATION
-#include <raygui.h>
-#undef RAYGUI_IMPLEMENTATION
-#include <style_cyber.h>
 
 bool halted = false;
 void handle_interrupts(Emu *emu, bool reset)
@@ -44,7 +40,7 @@ void handle_interrupts(Emu *emu, bool reset)
 int step(Emu *emu)
 {
   int cpuTicks = execute_cpu(&halted);
-  int machineTicks = cpuTicks * 3;
+  int machineTicks = 20 * 3;
   float vdpCycles = machineTicks / 2;
   handle_interrupts(emu, false);
   vdp_update(vdpCycles);
@@ -62,7 +58,7 @@ u8 get_input()
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_right) << 3;
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_ok) << 4;
   current_keys |= eadk_keyboard_key_down(keyboardState, eadk_key_back) << 5;
-  return ~current_keys
+  return ~current_keys;
 }
 
 void emu_loop(Emu *emu)
@@ -84,6 +80,11 @@ void emu_loop(Emu *emu)
   }
 }
 #else
+
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
+#undef RAYGUI_IMPLEMENTATION
+#include <style_cyber.h>
 u8 get_input()
 {
   u8 current_keys = 0;

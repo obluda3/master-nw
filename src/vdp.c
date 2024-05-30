@@ -210,7 +210,7 @@ void draw_line(u8 y, u8 *line)
 #ifdef TARGET_LINUX
   memcpy(vdp->framebuffer + y * 256, lineBuffer, sizeof(lineBuffer));
 #else
-// eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
+ eadk_display_push_rect((eadk_rect_t){0, y, 256, 1}, lineBuffer);
 #endif
 }
 
